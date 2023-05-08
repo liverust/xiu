@@ -1,6 +1,6 @@
 use http::Request;
 use http::StatusCode;
-use std::collections::HashMap;
+use indexmap::IndexMap;
 use std::io::{Read, Result};
 use std::net::TcpStream;
 
@@ -11,7 +11,7 @@ pub struct RtspRequest {
     pub method: String,
     pub url: String,
     pub version: String,
-    pub headers: HashMap<String, String>,
+    pub headers: IndexMap<String, String>,
     pub body: Option<String>,
 }
 
@@ -54,7 +54,9 @@ impl RtspRequest {
     fn marshal(&mut self) -> String {
         let mut request_str = format!("{} {} {}\r\n", self.method, self.url, self.version);
         for (header_name, header_value) in &self.headers {
-            request_str += &format!("{}: {}\r\n", header_name, header_value);
+            if header_name != &"Content-Length".to_string() {
+                request_str += &format!("{}: {}\r\n", header_name, header_value);
+            }
         }
         if let Some(body) = &self.body {
             request_str += &format!("Content-Length: {}\r\n", body.len());
@@ -71,7 +73,7 @@ struct RtspResponse {
     version: String,
     status_code: u16,
     reason_phrase: String,
-    headers: HashMap<String, String>,
+    headers: IndexMap<String, String>,
     body: Option<String>,
 }
 
@@ -121,7 +123,9 @@ impl RtspResponse {
             self.version, self.status_code, self.reason_phrase
         );
         for (header_name, header_value) in &self.headers {
-            response_str += &format!("{}: {}\r\n", header_name, header_value);
+            if header_name != &"Content-Length".to_string() {
+                response_str += &format!("{}: {}\r\n", header_name, header_value);
+            }
         }
         if let Some(body) = &self.body {
             response_str += &format!("Content-Length: {}\r\n", body.len());
@@ -139,24 +143,60 @@ mod tests {
 
     use super::RtspRequest;
 
+    use indexmap::IndexMap;
+    use std::io::{BufRead, BufReader, Read};
+
+    pub fn parse_request_bytes(data: &[u8]) -> Option<RtspRequest> {
+        let mut reader = BufReader::new(data);
+        // read the first line to get the request method, URL and version
+        let mut first_line = String::new();
+        if let Ok(size) = reader.read_line(&mut first_line) {
+            if size == 0 {
+                return None;
+            }
+            let mut fields = first_line.trim_end().split_ascii_whitespace();
+            let method = fields.next()?.to_string();
+            let url = fields.next()?.to_string();
+            let version = fields.next()?.to_string();
+            // read headers
+            let headers = read_headers(&mut reader)?;
+            // read body if there is any
+            let mut body = String::new();
+            reader.read_to_string(&mut body).ok();
+            Some(RtspRequest {
+                method,
+                url,
+                version,
+                headers,
+                body: if body.is_empty() { None } else { Some(body) },
+            })
+        } else {
+            None
+        }
+    }
+
+    fn read_headers(reader: &mut dyn BufRead) -> Option<IndexMap<String, String>> {
+        let mut headers = IndexMap::new();
+        loop {
+            let mut line = String::new();
+            match reader.read_line(&mut line) {
+                Ok(0) => break,
+                Ok(_) => {
+                    if let Some(index) = line.find(": ") {
+                        let name = line[..index].to_string();
+                        let value = line[index + 2..].trim().to_string();
+                        headers.insert(name, value);
+                    }
+                }
+                Err(_) => return None,
+            }
+        }
+        Some(headers)
+    }
+
     #[test]
-    fn test_parse_rtsp_request() {
-        let mut parser = RtspRequest::default();
-        let data1 = "SETUP rtsp://127.0.0.1:5544/stream/streamid=0 RTSP/1.0\r\n\
-        Transport: RTP/AVP/TCP;unicast;interleaved=0-1;mode=record\r\n\
-        CSeq: 3\r\n\
-        User-Agent: Lavf58.76.100\r\n\
-        \r\n";
-
-        parser.unmarshal(data1);
-        println!(" parser: {:?}", parser);
-
-        let marshal_result = parser.marshal();
-        print!("marshal result: =={}==", marshal_result);
-
-        let mut parser2 = RtspRequest::default();
-
-        let data2 = "ANNOUNCE rtsp://127.0.0.1:5544/stream RTSP/1.0\r\n\
+    fn test_parse_rtsp_request_chatgpt() {
+        let data1 = "ANNOUNCE rtsp://127.0.0.1:5544/stream RTSP/1.0\r\n\
         Content-Type: application/sdp\r\n\
         CSeq: 2\r\n\
         User-Agent: Lavf58.76.100\r\n\
@@ -179,7 +219,57 @@ mod tests {
         a=fmtp:97 profile-level-id=1;mode=AAC-hbr;sizelength=13;indexlength=3;indexdeltalength=3; config=119056E500\r\n\
         a=control:streamid=1\r\n";
 
+        if let Some(request) = parse_request_bytes(&data1.as_bytes()) {
+            println!(" parser: {:?}", request);
+        }
+    }
+
+    #[test]
+    fn test_parse_rtsp_request() {
+        let mut parser = RtspRequest::default();
+        let data1 = "SETUP rtsp://127.0.0.1:5544/stream/streamid=0 RTSP/1.0\r\n\
+        Transport: RTP/AVP/TCP;unicast;interleaved=0-1;mode=record\r\n\
+        CSeq: 3\r\n\
+        User-Agent: Lavf58.76.100\r\n\
+        \r\n";
+
+        parser.unmarshal(data1);
+        println!(" parser: {:?}", parser);
+
+        let marshal_result = parser.marshal();
+        print!("marshal result: =={}==", marshal_result);
+        assert_eq!(data1, marshal_result);
+
+        let mut parser2 = RtspRequest::default();
+
+        let data2 = "ANNOUNCE rtsp://127.0.0.1:5544/stream RTSP/1.0\r\n\
+        Content-Type: application/sdp\r\n\
+        CSeq: 2\r\n\
+        User-Agent: Lavf58.76.100\r\n\
+        Content-Length: 500\r\n\
+        \r\n\
+        v=0\r\n\
+        o=- 0 0 IN IP4 127.0.0.1\r\n\
+        s=No Name\r\n\
+        c=IN IP4 127.0.0.1\r\n\
+        t=0 0\r\n\
+        a=tool:libavformat 58.76.100\r\n\
+        m=video 0 RTP/AVP 96\r\n\
+        b=AS:284\r\n\
+        a=rtpmap:96 H264/90000\r\n\
+        a=fmtp:96 packetization-mode=1; sprop-parameter-sets=Z2QAHqzZQKAv+XARAAADAAEAAAMAMg8WLZY=,aOvjyyLA; profile-level-id=64001E\r\n\
+        a=control:streamid=0\r\n\
+        m=audio 0 RTP/AVP 97\r\n\
+        b=AS:128\r\n\
+        a=rtpmap:97 MPEG4-GENERIC/48000/2\r\n\
+        a=fmtp:97 profile-level-id=1;mode=AAC-hbr;sizelength=13;indexlength=3;indexdeltalength=3; config=119056E500\r\n\
+        a=control:streamid=1\r\n";
+
         parser2.unmarshal(data2);
+
+        let marshal_result2 = parser2.marshal();
+        print!("marshal result2: =={}==", marshal_result2);
+        assert_eq!(data2, marshal_result2);
 
         println!(" parser: {:?}", parser2);
     }
