@@ -1,24 +1,24 @@
 use bytes::BytesMut;
 
-trait FmtpSdp {
+pub trait Fmtp {
     fn parse(&mut self, raw_data: String);
 }
 
 #[derive(Debug, Clone, Default)]
-struct H264FmtpSdp {
+struct H264Fmtp {
     packetization_mode: u8,
     profile_level_id: BytesMut,
     sps: BytesMut,
     pps: BytesMut,
 }
 #[derive(Debug, Clone, Default)]
-struct H265FmtpSdp {
+struct H265Fmtp {
     vps: BytesMut,
     sps: BytesMut,
     pps: BytesMut,
 }
 #[derive(Debug, Clone, Default)]
-struct Mpeg4FmtpSdp {
+struct Mpeg4Fmtp {
     asc: BytesMut,
     profile_level_id: BytesMut,
     mode: String,
@@ -29,17 +29,17 @@ struct Mpeg4FmtpSdp {
 #[derive(Default)]
 struct UnknownFmtpSdp {}
 
-fn create_fmtp_sdp_parser(n: &str) -> Box<dyn FmtpSdp> {
+fn create_fmtp_sdp_parser(n: &str) -> Box<dyn Fmtp> {
     match n {
-        "h264" => Box::new(H264FmtpSdp::default()),
-        "h265" => Box::new(H265FmtpSdp::default()),
-        "mpeg4-generic" => Box::new(Mpeg4FmtpSdp::default()),
+        "h264" => Box::new(H264Fmtp::default()),
+        "h265" => Box::new(H265Fmtp::default()),
+        "mpeg4-generic" => Box::new(Mpeg4Fmtp::default()),
         _ => Box::new(UnknownFmtpSdp::default()),
     }
 }
 
 // a=fmtp:96 packetization-mode=1; sprop-parameter-sets=Z2QAFqyyAUBf8uAiAAADAAIAAAMAPB4sXJA=,aOvDyyLA; profile-level-id=640016
-impl FmtpSdp for H264FmtpSdp {
+impl Fmtp for H264Fmtp {
     fn parse(&mut self, raw_data: String) {
         let eles: Vec<&str> = raw_data.splitn(2, ' ').collect();
         if eles.len() < 2 {
@@ -76,7 +76,7 @@ impl FmtpSdp for H264FmtpSdp {
     }
 }
 
-impl FmtpSdp for H265FmtpSdp {
+impl Fmtp for H265Fmtp {
     //"a=fmtp:96 sprop-vps=QAEMAf//AWAAAAMAkAAAAwAAAwA/ugJA; sprop-sps=QgEBAWAAAAMAkAAAAwAAAwA/oAUCAXHy5bpKTC8BAQAAAwABAAADAA8I; sprop-pps=RAHAc8GJ"
     fn parse(&mut self, raw_data: String) {
         let eles: Vec<&str> = raw_data.splitn(2, ' ').collect();
@@ -111,7 +111,7 @@ impl FmtpSdp for H265FmtpSdp {
     }
 }
 
-impl FmtpSdp for Mpeg4FmtpSdp {
+impl Fmtp for Mpeg4Fmtp {
     //a=fmtp:97 profile-level-id=1;mode=AAC-hbr;sizelength=13;indexlength=3;indexdeltalength=3; config=121056e500
     fn parse(&mut self, raw_data: String) {
         let eles: Vec<&str> = raw_data.splitn(2, ' ').collect();
@@ -160,21 +160,21 @@ impl FmtpSdp for Mpeg4FmtpSdp {
     }
 }
 
-impl FmtpSdp for UnknownFmtpSdp {
+impl Fmtp for UnknownFmtpSdp {
     fn parse(&mut self, raw_data: String) {}
 }
 
 #[cfg(test)]
 mod tests {
 
-    use super::FmtpSdp;
-    use super::H264FmtpSdp;
-    use super::H265FmtpSdp;
-    use super::Mpeg4FmtpSdp;
+    use super::Fmtp;
+    use super::H264Fmtp;
+    use super::H265Fmtp;
+    use super::Mpeg4Fmtp;
 
     #[test]
     fn test_parse_h264fmtpsdp() {
-        let mut parser = H264FmtpSdp::default();
+        let mut parser = H264Fmtp::default();
 
         parser.parse("a=fmtp:96 packetization-mode=1; sprop-parameter-sets=Z2QAFqyyAUBf8uAiAAADAAIAAAMAPB4sXJA=,aOvDyyLA; profile-level-id=640016".to_string());
 
@@ -185,7 +185,7 @@ mod tests {
         assert_eq!(parser.sps, "Z2QAFqyyAUBf8uAiAAADAAIAAAMAPB4sXJA=");
         assert_eq!(parser.pps, "aOvDyyLA");
 
-        let mut parser2 = H264FmtpSdp::default();
+        let mut parser2 = H264Fmtp::default();
 
         parser2.parse("a=fmtp:96 packetization-mode=1;\nsprop-parameter-sets=Z2QAFqyyAUBf8uAiAAADAAIAAAMAPB4sXJA=,aOvDyyLA;\nprofile-level-id=640016".to_string());
 
@@ -198,7 +198,7 @@ mod tests {
     }
     #[test]
     fn test_parse_h265fmtpsdp() {
-        let mut parser = H265FmtpSdp::default();
+        let mut parser = H265Fmtp::default();
 
         parser.parse("a=fmtp:96 sprop-vps=QAEMAf//AWAAAAMAkAAAAwAAAwA/ugJA; sprop-sps=QgEBAWAAAAMAkAAAAwAAAwA/oAUCAXHy5bpKTC8BAQAAAwABAAADAA8I; sprop-pps=RAHAc8GJ".to_string());
 
@@ -214,7 +214,7 @@ mod tests {
 
     #[test]
     fn test_parse_mpeg4fmtpsdp() {
-        let mut parser = Mpeg4FmtpSdp::default();
+        let mut parser = Mpeg4Fmtp::default();
 
         parser.parse("a=fmtp:97 profile-level-id=1;mode=AAC-hbr;sizelength=13;indexlength=3;indexdeltalength=23; config=121056e500".to_string());
 

@@ -446,6 +446,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "env_logger_extend"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "49a04972dcdb9059f64c2be2b4445188c3d3713dabc7bb65cf10c933251dbc5d"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "env_logger",
+ "failure",
+ "job_scheduler",
+ "log",
+]
+
+[[package]]
 name = "errno"
 version = "0.2.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -730,19 +744,38 @@ checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
 
 [[package]]
 name = "hls"
-version = "0.1.2"
+version = "0.2.0"
 dependencies = [
  "byteorder",
  "bytes",
  "failure",
  "hyper",
  "log",
- "rtmp",
+ "rtmp 0.3.0",
  "tokio",
  "tokio-util 0.6.10",
  "uuid 0.6.5",
- "xflv 0.2.0",
- "xmpegts",
+ "xflv 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "xmpegts 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "hls"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4bcddaeb40f001559e2aebe20830eadfb61bce33dded69947d45fcdf5cb792f4"
+dependencies = [
+ "byteorder",
+ "bytes",
+ "failure",
+ "hyper",
+ "log",
+ "rtmp 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "tokio",
+ "tokio-util 0.6.10",
+ "uuid 0.6.5",
+ "xflv 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "xmpegts 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -818,10 +851,28 @@ dependencies = [
  "futures",
  "hyper",
  "log",
- "rtmp",
+ "rtmp 0.3.0",
  "tokio",
  "uuid 0.6.5",
- "xflv 0.2.0",
+ "xflv 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "httpflv"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d4f747536f21134e7a58627a32febf09a38a78c88b04aff5153e398eb7882ad9"
+dependencies = [
+ "byteorder",
+ "bytes",
+ "failure",
+ "futures",
+ "hyper",
+ "log",
+ "rtmp 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "tokio",
+ "uuid 0.6.5",
+ "xflv 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -1269,7 +1320,7 @@ dependencies = [
  "clap",
  "env_logger",
  "log",
- "rtmp",
+ "rtmp 0.3.0",
  "tokio",
 ]
 
@@ -1418,12 +1469,52 @@ dependencies = [
  "reqwest",
  "serde",
  "serde_json",
+ "sha2",
+ "tokio",
+ "uuid 0.6.5",
+ "xflv 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "rtmp"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d0de6f5aba0ea1bd5eab83f5d36732b13fe3fe331fc66693e5cd50d924119f32"
+dependencies = [
+ "byteorder",
+ "bytes",
+ "bytesio 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "chrono",
+ "failure",
+ "h264-decoder 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "hmac",
+ "indexmap",
+ "log",
+ "rand 0.3.23",
+ "reqwest",
+ "serde",
+ "serde_json",
  "serde_with",
  "sha2",
  "tokio",
  "tokio-util 0.6.10",
  "uuid 0.6.5",
  "xflv 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "rtsp"
+version = "0.1.0"
+dependencies = [
+ "byteorder",
+ "bytes",
+ "bytesio 0.2.0",
+ "failure",
+ "http",
+ "httparse",
+ "log",
+ "tokio",
+ "uuid 0.6.5",
 ]
 
 [[package]]
@@ -2249,18 +2340,18 @@ dependencies = [
 
 [[package]]
 name = "xiu"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "anyhow",
  "axum",
  "clap",
- "env_logger_extend",
+ "env_logger_extend 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "failure",
- "hls",
- "httpflv",
+ "hls 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "httpflv 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "libc",
  "log",
- "rtmp",
+ "rtmp 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde",
  "serde_derive",
  "serde_json",
@@ -2273,6 +2364,18 @@ dependencies = [
 [[package]]
 name = "xmpegts"
 version = "0.1.1"
+dependencies = [
+ "byteorder",
+ "bytes",
+ "bytesio 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "failure",
+]
+
+[[package]]
+name = "xmpegts"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "51456e116a38c34a4fd2c7ed2b6cf1ab23295130a5f379f62761da2233e91e05"
 dependencies = [
  "byteorder",
  "bytes",

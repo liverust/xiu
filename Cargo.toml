@@ -3,6 +3,7 @@ members = [
   "protocol/rtmp",
   "protocol/httpflv",
   "protocol/hls",
+  "protocol/rtsp",
   "library/bytesio",
   "application/xiu",
   "application/http-server",

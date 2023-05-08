@@ -15,7 +15,7 @@ pub enum ProtocolType {
 pub struct RtspTransport {
     cast_type: CastType,
     protocol_type: ProtocolType,
-    interleaved: [usize; 2],
+    interleaved: [u8; 2],
     transport_mod: String,
     client_port: [usize; 2],
     server_port: [usize; 2],
@@ -69,7 +69,7 @@ impl RtspTransport {
                     }
                 }
                 "interleaved" => {
-                    let vals = scanf!(kv[1], '-', usize, usize);
+                    let vals = scanf!(kv[1], '-', u8, u8);
                     if let Some(val) = vals.0 {
                         self.interleaved[0] = val;
                     }
