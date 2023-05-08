@@ -6,6 +6,13 @@ use std::net::TcpStream;
 
 const BUFFER_SIZE: usize = 8192;
 
+pub trait Message {
+    fn unmarshal(request_data: &str) -> Option<Self>
+    where
+        Self: Sized;
+    fn marshal(&self) -> String;
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct RtspRequest {
     pub method: String,
@@ -15,8 +22,9 @@ pub struct RtspRequest {
     pub body: Option<String>,
 }
 
-impl RtspRequest {
-    fn unmarshal(&mut self, request_data: &str) {
+impl Message for RtspRequest {
+    fn unmarshal(request_data: &str) -> Option<Self> {
+        let mut rtsp_request = RtspRequest::default();
         let header_end_idx = if let Some(idx) = request_data.find("\r\n\r\n") {
             let data_except_body = &request_data[..idx];
             let mut lines = data_except_body.lines();
@@ -24,13 +32,13 @@ impl RtspRequest {
             if let Some(request_first_line) = lines.next() {
                 let mut fields = request_first_line.split_ascii_whitespace();
                 if let Some(method) = fields.next() {
-                    self.method = method.to_string();
+                    rtsp_request.method = method.to_string();
                 }
                 if let Some(url) = fields.next() {
-                    self.url = url.to_string();
+                    rtsp_request.url = url.to_string();
                 }
                 if let Some(version) = fields.next() {
-                    self.version = version.to_string();
+                    rtsp_request.version = version.to_string();
                 }
             }
             //parse headers
@@ -38,20 +46,22 @@ impl RtspRequest {
                 if let Some(index) = line.find(": ") {
                     let name = line[..index].to_string();
                     let value = line[index + 2..].to_string();
-                    self.headers.insert(name, value);
+                    rtsp_request.headers.insert(name, value);
                 }
             }
             idx + 4
         } else {
-            return;
+            return None;
         };
 
         if request_data.len() > header_end_idx {
             //parse body
-            self.body = Some(request_data[header_end_idx..].to_string());
+            rtsp_request.body = Some(request_data[header_end_idx..].to_string());
         }
+
+        Some(rtsp_request)
     }
-    fn marshal(&mut self) -> String {
+    fn marshal(&self) -> String {
         let mut request_str = format!("{} {} {}\r\n", self.method, self.url, self.version);
         for (header_name, header_value) in &self.headers {
             if header_name != &"Content-Length".to_string() {
@@ -141,6 +151,8 @@ impl RtspResponse {
 #[cfg(test)]
 mod tests {
 
+    use crate::http::parser::Message;
+
     use super::RtspRequest;
 
     use indexmap::IndexMap;
@@ -226,21 +238,18 @@ mod tests {
 
     #[test]
     fn test_parse_rtsp_request() {
-        let mut parser = RtspRequest::default();
         let data1 = "SETUP rtsp://127.0.0.1:5544/stream/streamid=0 RTSP/1.0\r\n\
         Transport: RTP/AVP/TCP;unicast;interleaved=0-1;mode=record\r\n\
         CSeq: 3\r\n\
         User-Agent: Lavf58.76.100\r\n\
         \r\n";
 
-        parser.unmarshal(data1);
-        println!(" parser: {:?}", parser);
-
-        let marshal_result = parser.marshal();
-        print!("marshal result: =={}==", marshal_result);
-        assert_eq!(data1, marshal_result);
-
-        let mut parser2 = RtspRequest::default();
+        if let Some(parser) = RtspRequest::unmarshal(data1) {
+            println!(" parser: {:?}", parser);
+            let marshal_result = parser.marshal();
+            print!("marshal result: =={}==", marshal_result);
+            assert_eq!(data1, marshal_result);
+        }
 
         let data2 = "ANNOUNCE rtsp://127.0.0.1:5544/stream RTSP/1.0\r\n\
         Content-Type: application/sdp\r\n\
@@ -265,12 +274,22 @@ mod tests {
         a=fmtp:97 profile-level-id=1;mode=AAC-hbr;sizelength=13;indexlength=3;indexdeltalength=3; config=119056E500\r\n\
         a=control:streamid=1\r\n";
 
-        parser2.unmarshal(data2);
+        if let Some(parser) = RtspRequest::unmarshal(data2) {
+            println!(" parser: {:?}", parser);
+            let marshal_result = parser.marshal();
+            print!("marshal result: =={}==", marshal_result);
+            assert_eq!(data2, marshal_result);
+        }
+    }
 
-        let marshal_result2 = parser2.marshal();
-        print!("marshal result2: =={}==", marshal_result2);
-        assert_eq!(data2, marshal_result2);
+    #[test]
+    fn test_http_status_code() {
+        let stats_code = http::StatusCode::OK;
 
-        println!(" parser: {:?}", parser2);
+        println!(
+            "stats_code: {}, {}",
+            stats_code.canonical_reason().unwrap(),
+            stats_code.as_u16()
+        )
     }
 }
