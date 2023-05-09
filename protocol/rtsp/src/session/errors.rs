@@ -3,6 +3,7 @@ use {
     bytesio::{bytes_errors::BytesWriteError, bytesio_errors::BytesIOError},
     failure::{Backtrace, Fail},
     std::fmt,
+    std::str::Utf8Error,
 };
 
 #[derive(Debug)]
@@ -16,6 +17,10 @@ pub enum SessionErrorValue {
     BytesIOError(#[cause] BytesIOError),
     #[fail(display = "bytes read error: {}\n", _0)]
     BytesReadError(#[cause] BytesReadError),
+    #[fail(display = "bytes write error: {}\n", _0)]
+    BytesWriteError(#[cause] BytesWriteError),
+    #[fail(display = "Utf8Error: {}\n", _0)]
+    Utf8Error(#[cause] Utf8Error),
 }
 
 impl From<BytesIOError> for SessionError {
@@ -30,6 +35,22 @@ impl From<BytesReadError> for SessionError {
     fn from(error: BytesReadError) -> Self {
         SessionError {
             value: SessionErrorValue::BytesReadError(error),
+        }
+    }
+}
+
+impl From<BytesWriteError> for SessionError {
+    fn from(error: BytesWriteError) -> Self {
+        SessionError {
+            value: SessionErrorValue::BytesWriteError(error),
+        }
+    }
+}
+
+impl From<Utf8Error> for SessionError {
+    fn from(error: Utf8Error) -> Self {
+        SessionError {
+            value: SessionErrorValue::Utf8Error(error),
         }
     }
 }

@@ -1,3 +1,5 @@
+use crate::sdp::rtpmap;
+
 pub mod rtsp_method_name {
     pub const OPTIONS: &str = "OPTIONS";
     pub const DESCRIBE: &str = "DESCRIBE";
@@ -10,4 +12,18 @@ pub mod rtsp_method_name {
     pub const SET_PARAMETER: &str = "SET_PARAMETER";
     pub const REDIRECT: &str = "REDIRECT";
     pub const RECORD: &str = "RECORD";
+
+    pub const ARRAY: [&str; 11] = [
+        OPTIONS,
+        DESCRIBE,
+        ANNOUNCE,
+        SETUP,
+        PLAY,
+        PAUSE,
+        TEARDOWN,
+        GET_PARAMETER,
+        SET_PARAMETER,
+        REDIRECT,
+        RECORD,
+    ];
 }

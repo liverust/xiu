@@ -1,20 +1,27 @@
 pub mod define;
 pub mod errors;
+use crate::http::parser::Message;
+use crate::http::parser::RtspResponse;
 use crate::rtsp_transport::RtspTransport;
 use byteorder::BigEndian;
 use bytes::BytesMut;
 use bytesio::bytes_reader::AsyncBytesReader;
+use bytesio::bytes_writer::AsyncBytesWriter;
 use errors::SessionError;
 
+use super::http::parser::RtspRequest;
 use define::rtsp_method_name;
 use httparse::Request;
 use httparse::Response;
+use indexmap::indexmap;
+use indexmap::IndexMap;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use uuid::Uuid;
 
 pub struct RtspServerSession {
     reader: AsyncBytesReader,
+    writer: AsyncBytesWriter,
 
     bytesio_data: BytesMut,
 
@@ -66,25 +73,31 @@ impl RtspServerSession {
 
         let data = self.reader.bytes_reader.extract_remaining_bytes();
 
-        let mut headers = [httparse::EMPTY_HEADER; 16];
-        let mut req = Request::new(&mut headers);
-        let res = req.parse(&data[..]).unwrap();
-        if res.is_partial() {
-            match req.path {
-                Some(ref path) => {
-                    // check router for path.
-                    // /404 doesn't exist? we could stop parsing
+        if let Some(rtsp_request) = RtspRequest::unmarshal(std::str::from_utf8(&data)?) {
+            match rtsp_request.method.as_str() {
+                rtsp_method_name::OPTIONS => {
+                    let public_str = rtsp_method_name::ARRAY.join(",");
+
+                    let stats_code = http::StatusCode::OK;
+                    let reason_phrase = if let Some(reason) = stats_code.canonical_reason() {
+                        reason.to_string()
+                    } else {
+                        "".to_string()
+                    };
+                    let mut response = RtspResponse {
+                        headers: indexmap! {"Public".to_string() => public_str},
+                        version: "RTSP/1.0".to_string(),
+                        status_code: stats_code.as_u16(),
+                        reason_phrase,
+                        ..Default::default()
+                    };
+
+                    if let Some(cseq) = rtsp_request.headers.get("CSeq") {
+                        response
+                            .headers
+                            .insert("CSeq".to_string(), cseq.to_string());
+                    }
                 }
-                None => {
-                    // must read more and parse again
-                }
-            }
-        } else if let Some(method) = req.method {
-            match method {
-                //OPTIONS rtsp://127.0.0.1:5544/stream RTSP/1.0
-                //CSeq: 1
-                //User-Agent: Lavf58.76.100
-                rtsp_method_name::OPTIONS => {}
                 rtsp_method_name::DESCRIBE => {}
                 rtsp_method_name::ANNOUNCE => {}
                 rtsp_method_name::SETUP => {}
@@ -103,5 +116,10 @@ impl RtspServerSession {
     }
 
     fn on_rtp_over_rtsp_message(&mut self) {}
-    fn send_response(&mut self) {}
+    fn send_response(&mut self, response: &RtspResponse) -> Result<(), SessionError> {
+        self.writer.write(response.marshal().as_bytes())?;
+
+        Ok(())
+        //response.
+    }
 }

@@ -4,8 +4,6 @@ use indexmap::IndexMap;
 use std::io::{Read, Result};
 use std::net::TcpStream;
 
-const BUFFER_SIZE: usize = 8192;
-
 pub trait Message {
     fn unmarshal(request_data: &str) -> Option<Self>
     where
@@ -79,16 +77,18 @@ impl Message for RtspRequest {
     }
 }
 
-struct RtspResponse {
-    version: String,
-    status_code: u16,
-    reason_phrase: String,
-    headers: IndexMap<String, String>,
-    body: Option<String>,
+#[derive(Debug, Clone, Default)]
+pub struct RtspResponse {
+    pub version: String,
+    pub status_code: u16,
+    pub reason_phrase: String,
+    pub headers: IndexMap<String, String>,
+    pub body: Option<String>,
 }
 
-impl RtspResponse {
-    fn unmarshal(&mut self, request_data: &str) {
+impl Message for RtspResponse {
+    fn unmarshal(request_data: &str) -> Option<Self> {
+        let mut rtsp_response = RtspResponse::default();
         let header_end_idx = if let Some(idx) = request_data.find("\r\n\r\n") {
             let data_except_body = &request_data[..idx];
             let mut lines = data_except_body.lines();
@@ -97,15 +97,15 @@ impl RtspResponse {
                 let mut fields = request_first_line.split_ascii_whitespace();
 
                 if let Some(version) = fields.next() {
-                    self.version = version.to_string();
+                    rtsp_response.version = version.to_string();
                 }
                 if let Some(status) = fields.next() {
                     if let Ok(status) = status.parse::<u16>() {
-                        self.status_code = status;
+                        rtsp_response.status_code = status;
                     }
                 }
                 if let Some(reason_phrase) = fields.next() {
-                    self.reason_phrase = reason_phrase.to_string();
+                    rtsp_response.reason_phrase = reason_phrase.to_string();
                 }
             }
             //parse headers
@@ -113,21 +113,23 @@ impl RtspResponse {
                 if let Some(index) = line.find(": ") {
                     let name = line[..index].to_string();
                     let value = line[index + 2..].to_string();
-                    self.headers.insert(name, value);
+                    rtsp_response.headers.insert(name, value);
                 }
             }
             idx + 4
         } else {
-            return;
+            return None;
         };
 
         if request_data.len() > header_end_idx {
             //parse body
-            self.body = Some(request_data[header_end_idx..].to_string());
+            rtsp_response.body = Some(request_data[header_end_idx..].to_string());
         }
+
+        Some(rtsp_response)
     }
 
-    pub fn marshal(&self) -> String {
+    fn marshal(&self) -> String {
         let mut response_str = format!(
             "{} {} {}\r\n",
             self.version, self.status_code, self.reason_phrase
