@@ -4,12 +4,7 @@ use indexmap::IndexMap;
 use std::io::{Read, Result};
 use std::net::TcpStream;
 
-pub trait Message {
-    fn unmarshal(request_data: &str) -> Option<Self>
-    where
-        Self: Sized;
-    fn marshal(&self) -> String;
-}
+use crate::global_trait::TMsgConverter;
 
 #[derive(Debug, Clone, Default)]
 pub struct RtspRequest {
@@ -20,7 +15,7 @@ pub struct RtspRequest {
     pub body: Option<String>,
 }
 
-impl Message for RtspRequest {
+impl TMsgConverter for RtspRequest {
     fn unmarshal(request_data: &str) -> Option<Self> {
         let mut rtsp_request = RtspRequest::default();
         let header_end_idx = if let Some(idx) = request_data.find("\r\n\r\n") {
@@ -86,7 +81,7 @@ pub struct RtspResponse {
     pub body: Option<String>,
 }
 
-impl Message for RtspResponse {
+impl TMsgConverter for RtspResponse {
     fn unmarshal(request_data: &str) -> Option<Self> {
         let mut rtsp_response = RtspResponse::default();
         let header_end_idx = if let Some(idx) = request_data.find("\r\n\r\n") {
@@ -153,7 +148,7 @@ impl Message for RtspResponse {
 #[cfg(test)]
 mod tests {
 
-    use crate::http::parser::Message;
+    use crate::http::parser::TMsgConverter;
 
     use super::RtspRequest;
 

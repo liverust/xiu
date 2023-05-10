@@ -1,6 +1,7 @@
 pub mod fmtp;
 pub mod rtpmap;
 
+use crate::global_trait::TMsgConverter;
 use fmtp::Fmtp;
 use rtpmap::RtpMap;
 use std::collections::HashMap;
@@ -27,8 +28,8 @@ struct SdpMedia {
     port: usize,
     protocol: String,
     fmts: Vec<u8>,
-    attributes: HashMap<String, String>,
-    control: String,
+    // attributes: HashMap<String, String>,
+    // control: String,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -37,33 +38,38 @@ struct Sdp {
     attributes: HashMap<String, String>,
 }
 
-impl SdpMedia {
+impl TMsgConverter for SdpMedia {
     //m=audio 11704 RTP/AVP 96 97 98 0 8 18 101 99 100 */
     //m=video 20003 RTP/AVP 97
-    fn parse(&mut self, raw_data: &str) {
+    fn unmarshal(raw_data: &str) -> Option<Self> {
+        let mut sdp_media = SdpMedia::default();
         let parameters: Vec<&str> = raw_data.split(' ').collect();
         let param_len = parameters.len();
 
         if param_len > 0 {
-            self.media_type = parameters[0].to_string();
+            sdp_media.media_type = parameters[0].to_string();
         }
         if param_len > 1 {
             if let Ok(port) = parameters[1].parse::<usize>() {
-                self.port = port;
+                sdp_media.port = port;
             }
         }
         if param_len > 2 {
-            self.protocol = parameters[2].to_string();
+            sdp_media.protocol = parameters[2].to_string();
         }
 
         let mut cur_param_idx = 3;
         while cur_param_idx < param_len {
             if let Ok(fmt) = parameters[cur_param_idx].parse::<u8>() {
-                self.fmts.push(fmt);
+                sdp_media.fmts.push(fmt);
             }
 
             cur_param_idx += 1;
         }
+        Some(sdp_media)
+    }
+    fn marshal(&self) -> String {
+        String::default()
     }
 }
 
@@ -82,9 +88,9 @@ impl Sdp {
                 //m=audio 11704 RTP/AVP 96 97 98 0 8 18 101 99 100 */
                 //m=video 20003 RTP/AVP 97
                 "m" => {
-                    let mut sdp_media = SdpMedia::default();
-                    sdp_media.parse(kv[1]);
-                    self.medias.push(sdp_media);
+                    if let Some(sdp_media) = SdpMedia::unmarshal(kv[1]) {
+                        self.medias.push(sdp_media);
+                    }
                 }
                 "a" => {
                     let attribute: Vec<&str> = kv[1].splitn(2, ':').collect();

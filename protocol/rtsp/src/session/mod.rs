@@ -1,7 +1,8 @@
 pub mod define;
 pub mod errors;
-use crate::http::parser::Message;
 use crate::http::parser::RtspResponse;
+
+use crate::global_trait::TMsgConverter;
 use crate::rtsp_transport::RtspTransport;
 use byteorder::BigEndian;
 use bytes::BytesMut;
