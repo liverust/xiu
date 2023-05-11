@@ -104,7 +104,7 @@ mod tests {
 
     #[test]
     fn test_parse_transport() {
-        let mut parser = RtspTransport::unmarshal(
+        let parser = RtspTransport::unmarshal(
             "RTP/AVP;unicast;client_port=8000-8001;server_port=9000-9001;ssrc=1234;interleaved=0-1;mode=record",
         ).unwrap();
 

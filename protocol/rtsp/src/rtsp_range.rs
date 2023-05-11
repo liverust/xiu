@@ -17,9 +17,6 @@ pub struct RtspRange {
 
 impl TMsgConverter for RtspRange {
     fn unmarshal(raw_data: &str) -> Option<Self> {
-        //a=range:clock=20210520T063812Z-20210520T064816Z
-        //a=range:npt=now-
-        //a=range:npt=0-
         let mut rtsp_range = RtspRange::default();
 
         let kv: Vec<&str> = raw_data.splitn(2, '=').collect();
@@ -30,11 +27,23 @@ impl TMsgConverter for RtspRange {
         match kv[0] {
             "clock" => {
                 rtsp_range.range_type = RtspRangeType::CLOCK;
-
                 let ranges: Vec<&str> = kv[1].split('-').collect();
-                rtsp_range.begin = rtsp_utils::time_2_epoch_seconds(ranges[0]);
+
+                let get_clock_time = |range_time: &str| -> i64 {
+                    let datetime =
+                        match chrono::NaiveDateTime::parse_from_str(range_time, "%Y%m%dT%H%M%SZ") {
+                            Ok(dt) => dt,
+                            Err(err) => {
+                                println!("get_clock_time error: {}", err);
+                                return -1;
+                            }
+                        };
+                    datetime.timestamp()
+                };
+
+                rtsp_range.begin = get_clock_time(ranges[0]);
                 if ranges.len() > 1 {
-                    rtsp_range.end = Some(rtsp_utils::time_2_epoch_seconds(ranges[1]));
+                    rtsp_range.end = Some(get_clock_time(ranges[1]));
                 }
             }
             "npt" => {
@@ -64,7 +73,7 @@ impl TMsgConverter for RtspRange {
                     }
                 }
 
-                if ranges.len() == 2 {
+                if ranges.len() == 2 && ranges[1] != "" {
                     rtsp_range.end = Some(get_npt_time(ranges[1]));
                 }
             }
@@ -78,5 +87,29 @@ impl TMsgConverter for RtspRange {
 
     fn marshal(&self) -> String {
         String::default()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+
+    use super::RtspRange;
+    use crate::global_trait::TMsgConverter;
+
+    #[test]
+    fn test_parse_transport() {
+        //a=range:
+        //a=range:npt=now-
+        //a=range:npt=0-
+        let parser = RtspRange::unmarshal("clock=20220520T064812Z-20230520T064816Z").unwrap();
+
+        println!(" parser: {:?}", parser);
+
+        let parser1 = RtspRange::unmarshal("npt=now-").unwrap();
+
+        println!(" parser1: {:?}, {}", parser1, parser1.end.is_none());
+
+        let parser2 = RtspRange::unmarshal("npt=0-").unwrap();
+        println!(" parser2: {:?}, {}", parser2, parser2.end.is_none());
     }
 }
