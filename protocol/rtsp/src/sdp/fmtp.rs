@@ -4,20 +4,20 @@ use bytes::BytesMut;
 // pub trait Fmtp: TMsgConverter {}
 
 #[derive(Debug, Clone, Default)]
-struct H264Fmtp {
+pub struct H264Fmtp {
     packetization_mode: u8,
     profile_level_id: BytesMut,
     sps: BytesMut,
     pps: BytesMut,
 }
 #[derive(Debug, Clone, Default)]
-struct H265Fmtp {
+pub struct H265Fmtp {
     vps: BytesMut,
     sps: BytesMut,
     pps: BytesMut,
 }
 #[derive(Debug, Clone, Default)]
-struct Mpeg4Fmtp {
+pub struct Mpeg4Fmtp {
     asc: BytesMut,
     profile_level_id: BytesMut,
     mode: String,
@@ -25,15 +25,34 @@ struct Mpeg4Fmtp {
     index_length: u16,
     index_delta_length: u16,
 }
-#[derive(Default)]
-struct UnknownFmtpSdp {}
+#[derive(Debug, Clone)]
+pub enum Fmtp {
+    H264(H264Fmtp),
+    H265(H265Fmtp),
+    Mpeg4(Mpeg4Fmtp),
+}
 
-pub fn create_fmtp_sdp_parser(n: &str) -> Box<dyn TMsgConverter> {
-    match n {
-        "h264" => Box::new(H264Fmtp::default()),
-        "h265" => Box::new(H265Fmtp::default()),
-        "mpeg4-generic" => Box::new(Mpeg4Fmtp::default()),
-        _ => Box::new(UnknownFmtpSdp::default()),
+impl Fmtp {
+    pub fn new(codec: &str, raw_data: &str) -> Option<Fmtp> {
+        match codec.to_lowercase().as_str() {
+            "h264" => {
+                if let Some(h264_fmtp) = H264Fmtp::unmarshal(raw_data) {
+                    return Some(Fmtp::H264(h264_fmtp));
+                }
+            }
+            "h265" => {
+                if let Some(h265_fmtp) = H265Fmtp::unmarshal(raw_data) {
+                    return Some(Fmtp::H265(h265_fmtp));
+                }
+            }
+            "mpeg4-generic" => {
+                if let Some(mpeg4_fmtp) = Mpeg4Fmtp::unmarshal(raw_data) {
+                    return Some(Fmtp::Mpeg4(mpeg4_fmtp));
+                }
+            }
+            _ => {}
+        }
+        None
     }
 }
 
@@ -172,16 +191,6 @@ impl TMsgConverter for Mpeg4Fmtp {
 
         Some(mpeg4_fmtp)
     }
-    fn marshal(&self) -> String {
-        String::default()
-    }
-}
-
-impl TMsgConverter for UnknownFmtpSdp {
-    fn unmarshal(raw_data: &str) -> Option<Self> {
-        Some(UnknownFmtpSdp::default())
-    }
-
     fn marshal(&self) -> String {
         String::default()
     }

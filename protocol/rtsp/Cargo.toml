@@ -16,5 +16,6 @@ failure = "0.1.1"
 httparse = "1.8.0"
 http = "0.2.9"
 indexmap = "1.9.3"
+chrono = "0.4"
 
 bytesio = { path = "../../library/bytesio/" }

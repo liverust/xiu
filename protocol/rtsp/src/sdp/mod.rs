@@ -2,9 +2,12 @@ pub mod fmtp;
 pub mod rtpmap;
 
 use crate::global_trait::TMsgConverter;
-use fmtp::create_fmtp_sdp_parser;
+
+use failure::Backtrace;
 use rtpmap::RtpMap;
 use std::collections::HashMap;
+
+use self::fmtp::Fmtp;
 
 #[derive(Debug, Clone, Default)]
 pub struct Bandwidth {
@@ -52,20 +55,35 @@ a=rtpmap:97 H264/90000
 a=fmtp:97 profile-level-id=42C01E;packetization-mode=1;sprop-parameter-sets=Z0LAHtkDxWhAAAADAEAAAAwDxYuSAAAAAQ==,aMuMsgAAAAE=
 a=control:track1
 m=audio 11704 RTP/AVP 96 97 98 0 8 18 101 99 100 */
-#[derive(Default)]
+
+#[derive(Default, Debug)]
 struct SdpMediaInfo {
     media_type: String,
     port: usize,
     protocol: String,
     fmts: Vec<u8>,
     bandwidth: Bandwidth,
-    rtpmap: Option<RtpMap>,
-    fmtp: Option<Box<dyn TMsgConverter>>,
+    rtpmap: RtpMap,
+    fmtp: Option<fmtp::Fmtp>,
     attributes: HashMap<String, String>,
-    control: String,
 }
 
-#[derive(Default)]
+// impl std::fmt::Debug for dyn TMsgConverter {
+//     fn fmt(&self, fmt: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+//         write!(fmt, "S2 {{ member: {:?} }}", self.member)
+//     }
+// }
+
+// impl Default for SdpMediaInfo {
+//     fn default() -> Self {
+//         Self {
+//             fmtp: Box::new(fmtp::UnknownFmtpSdp::default()),
+//             ..Default::default()
+//         }
+//     }
+// }
+
+#[derive(Default, Debug)]
 struct Sdp {
     raw_string: String,
     version: u16,
@@ -167,6 +185,15 @@ impl TMsgConverter for Sdp {
                         sdp.medias.push(sdp_media);
                     }
                 }
+                "b" => {
+                    let sdp_medias_len = sdp.medias.len();
+                    if sdp_medias_len == 0 {
+                        continue;
+                    }
+                    if let Some(cur_media) = sdp.medias.get_mut(sdp_medias_len - 1) {
+                        cur_media.bandwidth = Bandwidth::unmarshal(kv[1]).unwrap();
+                    }
+                }
                 "a" => {
                     let attribute: Vec<&str> = kv[1].splitn(2, ':').collect();
 
@@ -183,34 +210,25 @@ impl TMsgConverter for Sdp {
                         &mut sdp.attributes
                     } else {
                         if let Some(cur_media) = sdp.medias.get_mut(medias_len - 1) {
-                            //attributes  under the 'm' line
-
-                            // m=video 0 RTP/AVP 96\r\n\
-                            // b=AS:284\r\n\
-                            // a=rtpmap:96 H264/90000\r\n\
-                            // a=fmtp:96 packetization-mode=1; sprop-parameter-sets=Z2QAHqzZQKAv+XARAAADAAEAAAMAMg8WLZY=,aOvjyyLA; profile-level-id=64001E\r\n\
-                            // a=control:streamid=0\r\n\
-                            // m=audio 0 RTP/AVP 97\r\n\
-                            // b=AS:128\r\n\
-                            // a=rtpmap:97 MPEG4-GENERIC/48000/2\r\n\
-                            // a=fmtp:97 profile-level-id=1;mode=AAC-hbr;sizelength=13;indexlength=3;indexdeltalength=3; config=119056E500\r\n\
-                            // a=control:streamid=1\r\n";
                             let parameters: Vec<&str> = kv[1].splitn(2, ':').collect();
                             if parameters.len() == 2 {
                                 match parameters[0] {
                                     "rtpmap" => {
-                                        cur_media.rtpmap = RtpMap::unmarshal(parameters[1]);
+                                        if let Some(rtpmap) = RtpMap::unmarshal(parameters[1]) {
+                                            cur_media.rtpmap = rtpmap;
+                                            continue;
+                                        }
                                     }
                                     "fmtp" => {
-                                        if let Some(rtpmap) = &cur_media.rtpmap {
-                                            cur_media.fmtp =
-                                                Some(create_fmtp_sdp_parser(&rtpmap.encoding_name));
-                                        }
+                                        cur_media.fmtp = Fmtp::new(
+                                            &cur_media.rtpmap.encoding_name,
+                                            parameters[1],
+                                        );
+                                        continue;
                                     }
                                     _ => {}
                                 }
                             }
-
                             &mut cur_media.attributes
                         } else {
                             log::error!("should not be here!");
@@ -285,8 +303,8 @@ mod tests {
         // a=fmtp:97 profile-level-id=1;mode=AAC-hbr;sizelength=13;indexlength=3;indexdeltalength=3; config=119056E500：音频流的格式参数，如编码方式、采样长度、索引长度等。
         // a=control:streamid=1：指定音频流的流ID。
 
-        // if let Some(sdp) = Sdp::unmarshal(data2) {
-        //     println!("sdp : {:?}", sdp);
-        // }
+        if let Some(sdp) = Sdp::unmarshal(data2) {
+            println!("sdp : {:?}", sdp);
+        }
     }
 }

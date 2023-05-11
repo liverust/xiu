@@ -1509,6 +1509,7 @@ dependencies = [
  "byteorder",
  "bytes",
  "bytesio 0.2.0",
+ "chrono",
  "failure",
  "http",
  "httparse",

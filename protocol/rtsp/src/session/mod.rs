@@ -100,7 +100,9 @@ impl RtspServerSession {
                     }
                 }
                 rtsp_method_name::DESCRIBE => {}
-                rtsp_method_name::ANNOUNCE => {}
+                rtsp_method_name::ANNOUNCE => {
+                    
+                }
                 rtsp_method_name::SETUP => {}
                 rtsp_method_name::PLAY => {}
                 rtsp_method_name::PAUSE => {}
