@@ -5,13 +5,14 @@ use bytesio::bytes_errors::BytesWriteError;
 use bytesio::bytes_reader::BytesReader;
 use bytesio::bytes_writer::BytesWriter;
 
+#[derive(Debug, Clone, Default)]
 pub struct RtpHeader {
-    version: u8,            //2 bits
-    pub padding_flag: u8,   //1 bit
+    version: u8,            // 2 bits
+    pub padding_flag: u8,   // 1 bit
     pub extension_flag: u8, // 1 bit
     cc: u8,                 // 4 bits
     marker: u8,             // 1 bit
-    payload_type: u8,       //7 bits
+    payload_type: u8,       // 7 bits
     seq_number: u16,
     timestamp: u32,
     ssrc: u32,
