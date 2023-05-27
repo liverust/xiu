@@ -32,11 +32,15 @@ impl RtpH264UnPacker {
 
         if let Some(packet_type) = rtp_packet.payload.get(0) {
             match *packet_type {
+                1..=23 => {
+                    return self.unpack_single(rtp_packet.payload.clone(), *packet_type);
+                }
                 STAP_A | STAP_B => {
                     return self.unpack_stap(rtp_packet.payload.clone(), *packet_type);
                 }
-
-                MTAP_16 | MTAP_24 => {}
+                MTAP_16 | MTAP_24 => {
+                    return self.unpack_mtap(rtp_packet.payload.clone(), *packet_type);
+                }
                 FU_A | FU_B => {
                     return self.unpack_fu(rtp_packet.payload.clone(), *packet_type);
                 }
@@ -45,6 +49,14 @@ impl RtpH264UnPacker {
         }
 
         Ok(None)
+    }
+
+    fn unpack_single(
+        &mut self,
+        rtp_payload: BytesMut,
+        t: RtpNalType,
+    ) -> Result<Option<BytesMut>, BytesReadError> {
+        return Ok(Some(rtp_payload));
     }
 
     //  0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
@@ -235,8 +247,37 @@ impl RtpH264UnPacker {
     //   packet of type MTAP24 containing two multi-time
     //   aggregation units
 
-    fn unpack_mtap(&mut self) -> Result<Option<BytesMut>, BytesReadError> {
-        Ok(None)
+    fn unpack_mtap(
+        &mut self,
+        rtp_payload: BytesMut,
+        t: RtpNalType,
+    ) -> Result<Option<BytesMut>, BytesReadError> {
+        let mut payload_reader = BytesReader::new(rtp_payload);
+        //read decoding_order_number_base
+        payload_reader.read_u16::<BigEndian>()?;
+
+        let mut nalus = BytesMut::new();
+        while payload_reader.len() > 0 {
+            //read nalu size
+            let nalu_size = payload_reader.read_u16::<BigEndian>()? as usize;
+            // read dond
+            payload_reader.read_u8()?;
+            // read TS offs
+            let (ts, ts_bytes) = if t == MTAP_16 {
+                (payload_reader.read_u16::<BigEndian>()? as u32, 2_usize)
+            } else if t == MTAP_24 {
+                (payload_reader.read_u24::<BigEndian>()?, 3_usize)
+            } else {
+                log::warn!("should not be here!");
+                (0, 0)
+            };
+            assert!(ts != 0);
+            let nalu = payload_reader.read_bytes(nalu_size - ts_bytes - 1)?;
+            nalus.extend_from_slice(&ANNEXB_NALU_START_CODE);
+            nalus.put(nalu);
+        }
+
+        Ok(Some(nalus))
     }
 
     fn is_fu_start(fu_header: u8) -> bool {
