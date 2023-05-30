@@ -12,7 +12,9 @@ use rtp_header::RtpHeader;
 #[derive(Debug, Clone, Default)]
 pub struct RtpPacket {
     pub header: RtpHeader,
-    pub header_extension: BytesMut,
+    pub header_extension_profile: u16,
+    pub header_extension_length: u16,
+    pub header_extension_payload: BytesMut,
     pub payload: BytesMut,
     pub padding: BytesMut,
 }
@@ -31,11 +33,10 @@ impl RtpPacket {
             // |                        header extension                       |
             // |                             ....                              |
             // header_extension = profile(2 bytes) + length(2 bytes) + header extension payload
-            let profile = reader.read_u16::<BigEndian>()?;
-            self.header_extension.put_u16(profile);
-            let length = reader.read_u16::<BigEndian>()? as usize;
-            let header_extension_payload = reader.read_bytes(4 * length)?;
-            self.header_extension.put(header_extension_payload);
+            self.header_extension_profile = reader.read_u16::<BigEndian>()?;
+            self.header_extension_length = reader.read_u16::<BigEndian>()?;
+            self.header_extension_payload =
+                reader.read_bytes(4 * self.header_extension_length as usize)?;
         }
 
         if self.header.padding_flag == 1 {
@@ -50,7 +51,10 @@ impl RtpPacket {
     pub fn pack(&mut self, writer: &mut BytesWriter) -> Result<(), BytesWriteError> {
         self.header.pack(writer)?;
 
-        writer.write(&self.header_extension[..])?;
+        writer.write_u16::<BigEndian>(self.header_extension_profile)?;
+        writer.write_u16::<BigEndian>(self.header_extension_length)?;
+        writer.write(&self.header_extension_payload[..])?;
+
         writer.write(&self.payload[..])?;
         writer.write(&self.padding[..])?;
 

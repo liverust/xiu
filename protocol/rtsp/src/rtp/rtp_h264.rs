@@ -8,8 +8,6 @@ pub struct RtpH264UnPacker {
     sequence_number: u16,
     timestamp: u32,
     fu_buffer: BytesMut,
-    fu_indicator: u8,
-    fu_header: u8,
     flags: i16,
 }
 
@@ -105,19 +103,22 @@ impl RtpH264UnPacker {
         t: RtpNalType,
     ) -> Result<Option<BytesMut>, BytesReadError> {
         let mut payload_reader = BytesReader::new(rtp_payload);
-        self.fu_indicator = payload_reader.read_u8()?;
-        self.fu_header = payload_reader.read_u8()?;
+        let fu_indicator = payload_reader.read_u8()?;
+        let fu_header = payload_reader.read_u8()?;
 
         if t == FU_B {
             //read DON
             payload_reader.read_u16::<BigEndian>()?;
         }
 
-        if Self::is_fu_start(self.fu_header) {}
+        if Self::is_fu_start(fu_header) {
+            self.fu_buffer
+                .put_u8((fu_indicator & 0xE0) | (fu_header & 0x1F))
+        }
 
         self.fu_buffer.put(payload_reader.extract_remaining_bytes());
 
-        if Self::is_fu_end(self.fu_header) {
+        if Self::is_fu_end(fu_header) {
             let mut packet = BytesMut::new();
             packet.extend_from_slice(&ANNEXB_NALU_START_CODE);
             packet.put(self.fu_buffer.clone());
