@@ -16,16 +16,32 @@ pub struct RtpH264Packer {
 }
 
 impl RtpH264Packer {
-    pub fn pack(&mut self, nalus: BytesMut) -> Result<(), RtpH264PackerError> {
+    fn find_start_code(nalus: &[u8]) -> Option<usize> {
         let pattern = [0x00, 0x00, 0x01];
+        nalus.windows(pattern.len()).position(|w| w == pattern)
+    }
+    //pack annexb h264 data
+    pub fn pack(&mut self, nalus: &mut BytesMut) -> Result<(), RtpH264PackerError> {
         while nalus.len() > 0 {
-            if let Some(pos) = nalus.windows(pattern.len()).position(|w| w == pattern) {}
+            if let Some(pos_left) = Self::find_start_code(&nalus[..]) {
+                let mut nalu_with_start_code =
+                    if let Some(pos_right) = find_start_code(&nalus[pos_left + 3..]) {
+                        nalus.split_to(pos_left + pos_right + 3)
+                    } else {
+                        nalus.split_to(nalus.len())
+                    };
+
+                let nalu = nalu_with_start_code.split_off(pos_left + 3);
+                if nalu.len() + RTP_FIXED_HEADER_LEN <= self.mtu {
+                    return self.pack_single(nalu);
+                } else {
+                    return self.pack_fu_a(nalu);
+                }
+            } else {
+                break;
+            }
         }
-        if nalu.len() + RTP_FIXED_HEADER_LEN <= self.mtu {
-            return self.pack_single(nalu);
-        } else {
-            return self.pack_fu_a(nalu);
-        }
+
         Ok(())
     }
     pub fn pack_fu_a(&mut self, nalu: BytesMut) -> Result<(), RtpH264PackerError> {
