@@ -1,9 +1,83 @@
+use super::errors::RtpH264PackerError;
+use super::RtpHeader;
 use super::RtpPacket;
 use byteorder::BigEndian;
 use bytes::{BufMut, BytesMut};
 use bytesio::bytes_errors::BytesReadError;
 use bytesio::bytes_reader::BytesReader;
 use bytesio::bytes_writer::BytesWriter;
+
+pub type OnPacketFn = fn(BytesMut) -> Result<(), RtpH264PackerError>;
+
+pub struct RtpH264Packer {
+    header: RtpHeader,
+    mtu: usize,
+    on_packet_handler: Option<OnPacketFn>,
+}
+
+impl RtpH264Packer {
+    pub fn pack(&mut self, nalus: BytesMut) -> Result<(), RtpH264PackerError> {
+        let pattern = [0x00, 0x00, 0x01];
+        while nalus.len() > 0 {
+            if let Some(pos) = nalus.windows(pattern.len()).position(|w| w == pattern) {}
+        }
+        if nalu.len() + RTP_FIXED_HEADER_LEN <= self.mtu {
+            return self.pack_single(nalu);
+        } else {
+            return self.pack_fu_a(nalu);
+        }
+        Ok(())
+    }
+    pub fn pack_fu_a(&mut self, nalu: BytesMut) -> Result<(), RtpH264PackerError> {
+        let mut nalu_reader = BytesReader::new(nalu);
+        let byte_1st = nalu_reader.read_u8()?;
+
+        let fu_indicator: u8 = (byte_1st & 0xE0) | FU_A;
+        let mut fu_header: u8 = (byte_1st & 0x1F) | FU_START;
+        let mut left_nalu_bytes: usize = nalu_reader.len();
+        let mut fu_payload_len = 0;
+
+        while left_nalu_bytes > 0 {
+            if left_nalu_bytes + RTP_FIXED_HEADER_LEN <= self.mtu - 2 {
+                fu_header = (byte_1st & 0x1F) | FU_END;
+                fu_payload_len = left_nalu_bytes;
+            } else {
+                fu_payload_len = self.mtu - RTP_FIXED_HEADER_LEN - 2;
+            }
+
+            let mut packet = RtpPacket::new(self.header.clone());
+            packet.payload.put_u8(fu_indicator);
+            packet.payload.put_u8(fu_header);
+            let fu_payload = nalu_reader.read_bytes(fu_payload_len)?;
+            packet.payload.put(fu_payload);
+            packet.header.marker = if fu_header & FU_END > 0 { 1 } else { 0 };
+
+            let packet_bytesmut = packet.pack()?;
+            if let Some(f) = self.on_packet_handler {
+                f(packet_bytesmut);
+            }
+
+            left_nalu_bytes = nalu_reader.len();
+            self.header.seq_number += 1;
+        }
+
+        Ok(())
+    }
+    pub fn pack_single(&mut self, nalu: BytesMut) -> Result<(), RtpH264PackerError> {
+        let mut packet = RtpPacket::new(self.header.clone());
+        packet.header.marker = 1;
+        packet.payload.put(nalu);
+
+        let packet_bytesmut = packet.pack()?;
+
+        if let Some(f) = self.on_packet_handler {
+            f(packet_bytesmut);
+        }
+
+        Ok(())
+    }
+}
+
 pub struct RtpH264UnPacker {
     sequence_number: u16,
     timestamp: u32,
@@ -19,6 +93,9 @@ pub const MTAP_16: RtpNalType = 26;
 pub const MTAP_24: RtpNalType = 27;
 pub const FU_A: RtpNalType = 28;
 pub const FU_B: RtpNalType = 29;
+pub const FU_START: u8 = 0x80;
+pub const FU_END: u8 = 0x40;
+pub const RTP_FIXED_HEADER_LEN: usize = 12;
 
 const ANNEXB_NALU_START_CODE: [u8; 4] = [0x00, 0x00, 0x00, 0x01];
 
@@ -282,10 +359,10 @@ impl RtpH264UnPacker {
     }
 
     fn is_fu_start(fu_header: u8) -> bool {
-        fu_header & 0x80 > 0
+        fu_header & FU_START > 0
     }
 
     fn is_fu_end(fu_header: u8) -> bool {
-        fu_header & 0x40 > 0
+        fu_header & FU_END > 0
     }
 }

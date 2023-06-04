@@ -1,5 +1,7 @@
+pub mod errors;
 pub mod rtp_h264;
 pub mod rtp_header;
+pub mod utils;
 
 use byteorder::BigEndian;
 use bytes::{BufMut, BytesMut};
@@ -20,6 +22,12 @@ pub struct RtpPacket {
 }
 
 impl RtpPacket {
+    fn new(header: RtpHeader) -> Self {
+        Self {
+            header,
+            ..Default::default()
+        }
+    }
     //https://blog.jianchihu.net/webrtc-research-rtp-header-extension.html
     pub fn unpack(&mut self, reader: &mut BytesReader) -> Result<(), BytesReadError> {
         self.header.unpack(reader)?;
@@ -48,8 +56,10 @@ impl RtpPacket {
 
         Ok(())
     }
-    pub fn pack(&mut self, writer: &mut BytesWriter) -> Result<(), BytesWriteError> {
-        self.header.pack(writer)?;
+    pub fn pack(&mut self) -> Result<BytesMut, BytesWriteError> {
+        let mut writer = BytesWriter::new();
+
+        self.header.pack(&mut writer)?;
 
         writer.write_u16::<BigEndian>(self.header_extension_profile)?;
         writer.write_u16::<BigEndian>(self.header_extension_length)?;
@@ -58,6 +68,6 @@ impl RtpPacket {
         writer.write(&self.payload[..])?;
         writer.write(&self.padding[..])?;
 
-        Ok(())
+        Ok(writer.extract_current_bytes())
     }
 }
