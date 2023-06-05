@@ -25,7 +25,7 @@ impl RtpH264Packer {
         while nalus.len() > 0 {
             if let Some(pos_left) = Self::find_start_code(&nalus[..]) {
                 let mut nalu_with_start_code =
-                    if let Some(pos_right) = find_start_code(&nalus[pos_left + 3..]) {
+                    if let Some(pos_right) = Self::find_start_code(&nalus[pos_left + 3..]) {
                         nalus.split_to(pos_left + pos_right + 3)
                     } else {
                         nalus.split_to(nalus.len())
@@ -50,8 +50,9 @@ impl RtpH264Packer {
 
         let fu_indicator: u8 = (byte_1st & 0xE0) | FU_A;
         let mut fu_header: u8 = (byte_1st & 0x1F) | FU_START;
+
         let mut left_nalu_bytes: usize = nalu_reader.len();
-        let mut fu_payload_len = 0;
+        let mut fu_payload_len;
 
         while left_nalu_bytes > 0 {
             if left_nalu_bytes + RTP_FIXED_HEADER_LEN <= self.mtu - 2 {
@@ -118,11 +119,10 @@ const ANNEXB_NALU_START_CODE: [u8; 4] = [0x00, 0x00, 0x00, 0x01];
 impl RtpH264UnPacker {
     pub fn unpack(&mut self, reader: &mut BytesReader) -> Result<Option<BytesMut>, BytesReadError> {
         let mut rtp_packet = RtpPacket::default();
-
         rtp_packet.unpack(reader)?;
 
         if let Some(packet_type) = rtp_packet.payload.get(0) {
-            match *packet_type {
+            match *packet_type & 0x1F {
                 1..=23 => {
                     return self.unpack_single(rtp_packet.payload.clone(), *packet_type);
                 }
