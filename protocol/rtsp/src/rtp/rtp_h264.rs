@@ -1,4 +1,6 @@
+use super::define;
 use super::errors::RtpH264PackerError;
+use super::utils;
 use super::RtpHeader;
 use super::RtpPacket;
 use byteorder::BigEndian;
@@ -16,16 +18,12 @@ pub struct RtpH264Packer {
 }
 
 impl RtpH264Packer {
-    fn find_start_code(nalus: &[u8]) -> Option<usize> {
-        let pattern = [0x00, 0x00, 0x01];
-        nalus.windows(pattern.len()).position(|w| w == pattern)
-    }
     //pack annexb h264 data
     pub fn pack(&mut self, nalus: &mut BytesMut) -> Result<(), RtpH264PackerError> {
         while nalus.len() > 0 {
-            if let Some(pos_left) = Self::find_start_code(&nalus[..]) {
+            if let Some(pos_left) = utils::find_start_code(&nalus[..]) {
                 let mut nalu_with_start_code =
-                    if let Some(pos_right) = Self::find_start_code(&nalus[pos_left + 3..]) {
+                    if let Some(pos_right) = utils::find_start_code(&nalus[pos_left + 3..]) {
                         nalus.split_to(pos_left + pos_right + 3)
                     } else {
                         nalus.split_to(nalus.len())
@@ -113,8 +111,6 @@ pub const FU_B: RtpNalType = 29;
 pub const FU_START: u8 = 0x80;
 pub const FU_END: u8 = 0x40;
 pub const RTP_FIXED_HEADER_LEN: usize = 12;
-
-const ANNEXB_NALU_START_CODE: [u8; 4] = [0x00, 0x00, 0x00, 0x01];
 
 impl RtpH264UnPacker {
     pub fn unpack(&mut self, reader: &mut BytesReader) -> Result<Option<BytesMut>, BytesReadError> {
@@ -213,7 +209,7 @@ impl RtpH264UnPacker {
 
         if Self::is_fu_end(fu_header) {
             let mut packet = BytesMut::new();
-            packet.extend_from_slice(&ANNEXB_NALU_START_CODE);
+            packet.extend_from_slice(&define::ANNEXB_NALU_START_CODE);
             packet.put(self.fu_buffer.clone());
             self.fu_buffer.clear();
             return Ok(Some(packet));
@@ -282,7 +278,7 @@ impl RtpH264UnPacker {
         while payload_reader.len() > 0 {
             let length = payload_reader.read_u16::<BigEndian>()? as usize;
             let nalu = payload_reader.read_bytes(length)?;
-            nalus.extend_from_slice(&ANNEXB_NALU_START_CODE);
+            nalus.extend_from_slice(&define::ANNEXB_NALU_START_CODE);
             nalus.put(nalu);
         }
         Ok(Some(nalus))
@@ -347,6 +343,8 @@ impl RtpH264UnPacker {
         t: RtpNalType,
     ) -> Result<Option<BytesMut>, BytesReadError> {
         let mut payload_reader = BytesReader::new(rtp_payload);
+        //read NAL HDR
+        payload_reader.read_u8()?;
         //read decoding_order_number_base
         payload_reader.read_u16::<BigEndian>()?;
 
@@ -367,7 +365,7 @@ impl RtpH264UnPacker {
             };
             assert!(ts != 0);
             let nalu = payload_reader.read_bytes(nalu_size - ts_bytes - 1)?;
-            nalus.extend_from_slice(&ANNEXB_NALU_START_CODE);
+            nalus.extend_from_slice(&define::ANNEXB_NALU_START_CODE);
             nalus.put(nalu);
         }
 

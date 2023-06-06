@@ -33,3 +33,31 @@ impl From<BytesWriteError> for RtpH264PackerError {
         }
     }
 }
+
+#[derive(Debug)]
+pub struct RtpH265PackerError {
+    pub value: RtpH265PackerErrorValue,
+}
+#[derive(Debug, Fail)]
+pub enum RtpH265PackerErrorValue {
+    #[fail(display = "bytes read error: {}\n", _0)]
+    BytesReadError(BytesReadError),
+    #[fail(display = "bytes write error: {}\n", _0)]
+    BytesWriteError(BytesWriteError),
+}
+
+impl From<BytesReadError> for RtpH265PackerError {
+    fn from(error: BytesReadError) -> Self {
+        RtpH265PackerError {
+            value: RtpH265PackerErrorValue::BytesReadError(error),
+        }
+    }
+}
+
+impl From<BytesWriteError> for RtpH265PackerError {
+    fn from(error: BytesWriteError) -> Self {
+        RtpH265PackerError {
+            value: RtpH265PackerErrorValue::BytesWriteError(error),
+        }
+    }
+}
