@@ -34,6 +34,22 @@ impl From<BytesWriteError> for RtpH264PackerError {
     }
 }
 
+impl fmt::Display for RtpH264PackerError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        fmt::Display::fmt(&self.value, f)
+    }
+}
+
+impl Fail for RtpH264PackerError {
+    fn cause(&self) -> Option<&dyn Fail> {
+        self.value.cause()
+    }
+
+    fn backtrace(&self) -> Option<&Backtrace> {
+        self.value.backtrace()
+    }
+}
+
 #[derive(Debug)]
 pub struct RtpH265PackerError {
     pub value: RtpH265PackerErrorValue,
@@ -58,6 +74,51 @@ impl From<BytesWriteError> for RtpH265PackerError {
     fn from(error: BytesWriteError) -> Self {
         RtpH265PackerError {
             value: RtpH265PackerErrorValue::BytesWriteError(error),
+        }
+    }
+}
+
+impl fmt::Display for RtpH265PackerError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        fmt::Display::fmt(&self.value, f)
+    }
+}
+
+impl Fail for RtpH265PackerError {
+    fn cause(&self) -> Option<&dyn Fail> {
+        self.value.cause()
+    }
+
+    fn backtrace(&self) -> Option<&Backtrace> {
+        self.value.backtrace()
+    }
+}
+
+#[derive(Debug)]
+pub struct RtpPackerError {
+    pub value: RtpPackerErrorValue,
+}
+
+#[derive(Debug, Fail)]
+pub enum RtpPackerErrorValue {
+    #[fail(display = "h264 pack error: {}\n", _0)]
+    RtpH264PackerError(RtpH264PackerError),
+    #[fail(display = "h265 pack error: {}\n", _0)]
+    RtpH265PackerError(RtpH265PackerError),
+}
+
+impl From<RtpH264PackerError> for RtpPackerError {
+    fn from(error: RtpH264PackerError) -> Self {
+        RtpPackerError {
+            value: RtpPackerErrorValue::RtpH264PackerError(error),
+        }
+    }
+}
+
+impl From<RtpH265PackerError> for RtpPackerError {
+    fn from(error: RtpH265PackerError) -> Self {
+        RtpPackerError {
+            value: RtpPackerErrorValue::RtpH265PackerError(error),
         }
     }
 }

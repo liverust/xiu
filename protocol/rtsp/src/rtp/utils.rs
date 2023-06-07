@@ -1,19 +1,49 @@
+use super::errors::RtpPackerError;
 use bytes::{BufMut, BytesMut};
+
+pub trait TRtpPacker {
+    fn pack(&mut self, nalus: &mut BytesMut) -> Result<(), RtpPackerError>;
+    fn pack_nalu(&mut self, nalu: BytesMut) -> Result<(), RtpPackerError>;
+}
 
 pub fn find_start_code(nalus: &[u8]) -> Option<usize> {
     let pattern = [0x00, 0x00, 0x01];
     nalus.windows(pattern.len()).position(|w| w == pattern)
 }
 
-fn split_and_process_annexb(nalus: &BytesMut) -> Option<usize> {
-    let pattern = [0x00, 0x00, 0x01];
-    nalus.windows(pattern.len()).position(|w| w == pattern)
+pub fn split_annexb_and_process<T: TRtpPacker>(
+    nalus: &mut BytesMut,
+    packer: &mut T,
+) -> Result<(), RtpPackerError> {
+    while nalus.len() > 0 {
+        /* 0x02,...,0x00,0x00,0x01,0x02..,0x00,0x00,0x01  */
+        /*  |         |              |      |             */
+        /*  -----------              --------             */
+        /*   first_pos         distance_to_first_pos      */
+        if let Some(first_pos) = find_start_code(&nalus[..]) {
+            let mut nalu_with_start_code =
+                if let Some(distance_to_first_pos) = find_start_code(&nalus[first_pos + 3..]) {
+                    let mut second_pos = first_pos + 3 + distance_to_first_pos;
+                    while second_pos > 0 && nalus[second_pos - 1] == 0 {
+                        second_pos -= 1;
+                    }
+                    nalus.split_to(second_pos)
+                } else {
+                    nalus.split_to(nalus.len())
+                };
+
+            let nalu = nalu_with_start_code.split_off(first_pos + 3);
+            return packer.pack_nalu(nalu);
+        } else {
+            break;
+        }
+    }
+    Ok(())
 }
 
 #[cfg(test)]
 mod tests {
 
-    use super::split_and_process_annexb;
     use bytes::{BufMut, BytesMut};
     use indexmap::IndexMap;
     use std::io::{BufRead, BufReader, Read};
@@ -32,22 +62,27 @@ mod tests {
         ]);
 
         while nalus.len() > 0 {
-            if let Some(pos_left) = find_start_code(&nalus[..]) {
+            /* 0x02,...,0x00,0x00,0x01,0x02..,0x00,0x00,0x01  */
+            /*  |         |              |      |             */
+            /*  -----------              --------             */
+            /*   first_pos              second_pos            */
+            if let Some(first_pos) = find_start_code(&nalus[..]) {
                 let mut nalu_with_start_code =
-                    if let Some(mut pos_right) = find_start_code(&nalus[pos_left + 3..]) {
-                        println!("left: {} right: {}", pos_left, pos_right);
-                        while pos_right > 0 && nalus[pos_left + pos_right + 3 - 1] == 0 {
-                            pos_right -= 1;
+                    if let Some(distance_to_first_pos) = find_start_code(&nalus[first_pos + 3..]) {
+                        let mut second_pos = first_pos + 3 + distance_to_first_pos;
+                        println!("left: {} right: {}", first_pos, distance_to_first_pos);
+                        while second_pos > 0 && nalus[second_pos - 1] == 0 {
+                            second_pos -= 1;
                         }
                         // while nalus[pos_right ]
-                        nalus.split_to(pos_left + pos_right + 3)
+                        nalus.split_to(second_pos)
                     } else {
                         nalus.split_to(nalus.len())
                     };
 
                 println!("nalu_with_start_code: {:?}", nalu_with_start_code.to_vec());
 
-                let nalu = nalu_with_start_code.split_off(pos_left + 3);
+                let nalu = nalu_with_start_code.split_off(first_pos + 3);
                 println!("nalu: {:?}", nalu.to_vec());
             } else {
                 break;

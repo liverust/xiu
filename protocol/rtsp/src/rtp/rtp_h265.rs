@@ -1,7 +1,11 @@
 use std::ptr::NonNull;
 
 use super::define;
-use super::errors::RtpH264PackerError;
+use super::errors::RtpH265PackerError;
+
+use super::errors::RtpPackerError;
+use super::utils;
+use super::utils::TRtpPacker;
 use super::RtpHeader;
 use super::RtpPacket;
 use byteorder::BigEndian;
@@ -19,7 +23,7 @@ pub const FU_START: u8 = 0x80;
 pub const FU_END: u8 = 0x40;
 pub const RTP_FIXED_HEADER_LEN: usize = 12;
 
-pub type OnPacketFn = fn(BytesMut) -> Result<(), RtpH264PackerError>;
+pub type OnPacketFn = fn(BytesMut) -> Result<(), RtpH265PackerError>;
 
 pub struct RtpH265Packer {
     header: RtpHeader,
@@ -28,7 +32,94 @@ pub struct RtpH265Packer {
 }
 
 impl RtpH265Packer {
-    pub fn pack() {}
+    pub fn pack_fu(&mut self, nalu: BytesMut) -> Result<(), RtpH265PackerError> {
+        let mut nalu_reader = BytesReader::new(nalu);
+        /* NALU header
+        0               1
+        0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5
+        +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+        |F|    Type   |  LayerId  | TID |
+        +-------------+-----------------+
+
+        Forbidden zero(F) : 1 bit
+        NAL unit type(Type) : 6 bits
+        NUH layer ID(LayerId) : 6 bits
+        NUH temporal ID plus 1 (TID) : 3 bits
+        */
+        let nalu_header_1st_byte = nalu_reader.read_u8()?;
+        let nalu_header_2nd_byte = nalu_reader.read_u8()?;
+
+        /* The PayloadHdr needs replace Type with the FU type value(49) */
+        let payload_hdr: u16 = ((nalu_header_1st_byte as u16 & 0x81) | ((FU as u16) << 1)) << 8
+            | nalu_header_2nd_byte as u16;
+        /* FU header
+        +---------------+
+        |0|1|2|3|4|5|6|7|
+        +-+-+-+-+-+-+-+-+
+        |S|E|   FuType  |
+        +---------------+
+        */
+        /*set FuType from NALU header's Type */
+        let mut fu_header = (nalu_header_1st_byte >> 1) & 0x3F | FU_START;
+
+        let mut left_nalu_bytes: usize = nalu_reader.len();
+        let mut fu_payload_len: usize;
+
+        while left_nalu_bytes > 0 {
+            /* 3 = PayloadHdr(2 bytes) + FU header(1 byte) */
+            if left_nalu_bytes + RTP_FIXED_HEADER_LEN <= self.mtu - 3 {
+                fu_header = (nalu_header_1st_byte & 0x1F) | FU_END;
+                fu_payload_len = left_nalu_bytes;
+            } else {
+                fu_payload_len = self.mtu - RTP_FIXED_HEADER_LEN - 3;
+            }
+
+            let fu_payload = nalu_reader.read_bytes(fu_payload_len)?;
+
+            let mut packet = RtpPacket::new(self.header.clone());
+            packet.payload.put_u16(payload_hdr);
+            packet.payload.put_u8(fu_header);
+            packet.payload.put(fu_payload);
+            packet.header.marker = if fu_header & FU_END > 0 { 1 } else { 0 };
+
+            let packet_bytesmut = packet.pack()?;
+            if let Some(f) = self.on_packet_handler {
+                f(packet_bytesmut)?;
+            }
+            left_nalu_bytes = nalu_reader.len();
+            self.header.seq_number += 1;
+        }
+
+        Ok(())
+    }
+    pub fn pack_single(&mut self, nalu: BytesMut) -> Result<(), RtpH265PackerError> {
+        let mut packet = RtpPacket::new(self.header.clone());
+        packet.header.marker = 1;
+        packet.payload.put(nalu);
+
+        let packet_bytesmut = packet.pack()?;
+        self.header.seq_number += 1;
+
+        if let Some(f) = self.on_packet_handler {
+            return f(packet_bytesmut);
+        }
+        Ok(())
+    }
+}
+impl TRtpPacker for RtpH265Packer {
+    fn pack(&mut self, nalus: &mut BytesMut) -> Result<(), RtpPackerError> {
+        utils::split_annexb_and_process(nalus, self)?;
+        Ok(())
+    }
+
+    fn pack_nalu(&mut self, nalu: BytesMut) -> Result<(), RtpPackerError> {
+        if nalu.len() + RTP_FIXED_HEADER_LEN <= self.mtu {
+            self.pack_single(nalu)?;
+        } else {
+            self.pack_fu(nalu)?;
+        }
+        Ok(())
+    }
 }
 
 pub struct RtpH265UnPacker {
@@ -141,7 +232,7 @@ impl RtpH265UnPacker {
     |                               +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
     |                               :    ...OPTIONAL RTP padding    |
     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-
+    /* FU header */
     +---------------+
     |0|1|2|3|4|5|6|7|
     +-+-+-+-+-+-+-+-+
@@ -150,8 +241,8 @@ impl RtpH265UnPacker {
     */
     fn unpack_fu(&mut self, rtp_payload: BytesMut) -> Result<Option<BytesMut>, BytesReadError> {
         let mut payload_reader = BytesReader::new(rtp_payload);
-        let payload_header_1st_part = payload_reader.read_u8()?;
-        let payload_header_2nd_part = payload_reader.read_u8()?;
+        let payload_header_1st_byte = payload_reader.read_u8()?;
+        let payload_header_2nd_byte = payload_reader.read_u8()?;
         let fu_header = payload_reader.read_u8()?;
         if self.using_donl_field {
             payload_reader.read_bytes(2)?;
@@ -160,9 +251,9 @@ impl RtpH265UnPacker {
         if Self::is_fu_start(fu_header) {
             /*set NAL UNIT type 2 bytes */
             //replace Type of PayloadHdr with the FuType of FU header
-            let nal_1st_byte = (payload_header_1st_part & 0x81) | ((fu_header & 0x3F) << 1);
+            let nal_1st_byte = (payload_header_1st_byte & 0x81) | ((fu_header & 0x3F) << 1);
             self.fu_buffer.put_u8(nal_1st_byte);
-            self.fu_buffer.put_u8(payload_header_2nd_part);
+            self.fu_buffer.put_u8(payload_header_2nd_byte);
         }
 
         self.fu_buffer.put(payload_reader.extract_remaining_bytes());
