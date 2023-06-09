@@ -20,17 +20,19 @@ pub struct RtpAacPacker {
 }
 
 impl RtpAacPacker {
-    fn pack(data: &mut BytesMut) -> Result<(), RtpH264PackerError> {
-        let mut data_reader = BytesReader::new(data);
-        let check_bytes = data_reader.advance_bytes(2)?;
-        let byte_0 = check_bytes[0];
-        let byte_1 = check_bytes[1];
-
-        if 0xFF == byte_0 && 0xF0 == (byte_1 & 0xF0) && data_reader.len() > 7 {
-            data_reader.read_bytes(7)?;
-        }
+    fn pack(&self, data: &mut BytesMut) -> Result<(), RtpH264PackerError> {
+        let data_len = data.len();
 
         let mut packet = RtpPacket::new(self.header.clone());
+        packet.payload.put_u16(16);
+        packet.payload.put_u8((data_len >> 5) as u8);
+        packet.payload.put_u8(((data_len & 0x1F) << 3) as u8);
+        packet.payload.put(data);
+
+        let packet_data = packet.pack()?;
+        if let Some(f) = self.on_packet_handler {
+            f(packet_data);
+        }
 
         Ok(())
     }
