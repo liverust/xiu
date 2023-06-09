@@ -11,6 +11,31 @@ use bytesio::bytes_errors::BytesReadError;
 use bytesio::bytes_reader::BytesReader;
 use bytesio::bytes_writer::BytesWriter;
 
+pub type OnPacketFn = fn(BytesMut) -> Result<(), RtpH264PackerError>;
+
+pub struct RtpAacPacker {
+    header: RtpHeader,
+    mtu: usize,
+    on_packet_handler: Option<OnPacketFn>,
+}
+
+impl RtpAacPacker {
+    fn pack(data: &mut BytesMut) -> Result<(), RtpH264PackerError> {
+        let mut data_reader = BytesReader::new(data);
+        let check_bytes = data_reader.advance_bytes(2)?;
+        let byte_0 = check_bytes[0];
+        let byte_1 = check_bytes[1];
+
+        if 0xFF == byte_0 && 0xF0 == (byte_1 & 0xF0) && data_reader.len() > 7 {
+            data_reader.read_bytes(7)?;
+        }
+
+        let mut packet = RtpPacket::new(self.header.clone());
+
+        Ok(())
+    }
+}
+
 pub type OnFrameFn = fn(BytesMut) -> Result<(), RtpH264PackerError>;
 pub struct RtpAacUnPacker {
     sequence_number: u16,
