@@ -24,7 +24,7 @@ impl RtcpHeader {
         let byte_1st: u8 = reader.read_u8()?;
         self.version = byte_1st >> 6;
         self.padding_flag = (byte_1st >> 5) & 0x01;
-        self.report_count = byte_1st << 3;
+        self.report_count = byte_1st & 0x1F;
         self.payload_type = reader.read_u8()?;
         self.length = reader.read_u16::<BigEndian>()?;
 
