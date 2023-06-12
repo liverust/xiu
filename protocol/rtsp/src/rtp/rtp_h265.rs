@@ -14,15 +14,6 @@ use bytesio::bytes_errors::BytesReadError;
 use bytesio::bytes_reader::BytesReader;
 use bytesio::bytes_writer::BytesWriter;
 
-type RtpNalType = u8;
-pub const AP: RtpNalType = 48; //Aggregation Packets
-pub const FU: RtpNalType = 49; //Fragmentation Units
-pub const PACI: RtpNalType = 50;
-
-pub const FU_START: u8 = 0x80;
-pub const FU_END: u8 = 0x40;
-pub const RTP_FIXED_HEADER_LEN: usize = 12;
-
 pub type OnPacketFn = fn(BytesMut) -> Result<(), RtpH265PackerError>;
 
 pub struct RtpH265Packer {
@@ -50,7 +41,8 @@ impl RtpH265Packer {
         let nalu_header_2nd_byte = nalu_reader.read_u8()?;
 
         /* The PayloadHdr needs replace Type with the FU type value(49) */
-        let payload_hdr: u16 = ((nalu_header_1st_byte as u16 & 0x81) | ((FU as u16) << 1)) << 8
+        let payload_hdr: u16 = ((nalu_header_1st_byte as u16 & 0x81) | ((define::FU as u16) << 1))
+            << 8
             | nalu_header_2nd_byte as u16;
         /* FU header
         +---------------+
@@ -60,18 +52,18 @@ impl RtpH265Packer {
         +---------------+
         */
         /*set FuType from NALU header's Type */
-        let mut fu_header = (nalu_header_1st_byte >> 1) & 0x3F | FU_START;
+        let mut fu_header = (nalu_header_1st_byte >> 1) & 0x3F | define::FU_START;
 
         let mut left_nalu_bytes: usize = nalu_reader.len();
         let mut fu_payload_len: usize;
 
         while left_nalu_bytes > 0 {
             /* 3 = PayloadHdr(2 bytes) + FU header(1 byte) */
-            if left_nalu_bytes + RTP_FIXED_HEADER_LEN <= self.mtu - 3 {
-                fu_header = (nalu_header_1st_byte & 0x1F) | FU_END;
+            if left_nalu_bytes + define::RTP_FIXED_HEADER_LEN <= self.mtu - 3 {
+                fu_header = (nalu_header_1st_byte & 0x1F) | define::FU_END;
                 fu_payload_len = left_nalu_bytes;
             } else {
-                fu_payload_len = self.mtu - RTP_FIXED_HEADER_LEN - 3;
+                fu_payload_len = self.mtu - define::RTP_FIXED_HEADER_LEN - 3;
             }
 
             let fu_payload = nalu_reader.read_bytes(fu_payload_len)?;
@@ -80,7 +72,7 @@ impl RtpH265Packer {
             packet.payload.put_u16(payload_hdr);
             packet.payload.put_u8(fu_header);
             packet.payload.put(fu_payload);
-            packet.header.marker = if fu_header & FU_END > 0 { 1 } else { 0 };
+            packet.header.marker = if fu_header & define::FU_END > 0 { 1 } else { 0 };
 
             let packet_bytesmut = packet.pack()?;
             if let Some(f) = self.on_packet_handler {
@@ -113,7 +105,7 @@ impl TRtpPacker for RtpH265Packer {
     }
 
     fn pack_nalu(&mut self, nalu: BytesMut) -> Result<(), RtpPackerError> {
-        if nalu.len() + RTP_FIXED_HEADER_LEN <= self.mtu {
+        if nalu.len() + define::RTP_FIXED_HEADER_LEN <= self.mtu {
             self.pack_single(nalu)?;
         } else {
             self.pack_fu(nalu)?;
@@ -140,13 +132,13 @@ impl RtpH265UnPacker {
                 1..=39 => {
                     return self.unpack_single(rtp_packet.payload.clone());
                 }
-                FU => {
+                define::FU => {
                     return self.unpack_fu(rtp_packet.payload.clone());
                 }
-                AP => {
+                define::AP => {
                     return self.unpack_ap(rtp_packet.payload);
                 }
-                PACI.. => {}
+                define::PACI.. => {}
 
                 _ => {}
             }
@@ -248,7 +240,7 @@ impl RtpH265UnPacker {
             payload_reader.read_bytes(2)?;
         }
 
-        if Self::is_fu_start(fu_header) {
+        if utils::is_fu_start(fu_header) {
             /*set NAL UNIT type 2 bytes */
             //replace Type of PayloadHdr with the FuType of FU header
             let nal_1st_byte = (payload_header_1st_byte & 0x81) | ((fu_header & 0x3F) << 1);
@@ -258,7 +250,7 @@ impl RtpH265UnPacker {
 
         self.fu_buffer.put(payload_reader.extract_remaining_bytes());
 
-        if Self::is_fu_end(fu_header) {
+        if utils::is_fu_end(fu_header) {
             let mut packet = BytesMut::new();
             packet.extend_from_slice(&define::ANNEXB_NALU_START_CODE);
             packet.put(self.fu_buffer.clone());
@@ -267,13 +259,5 @@ impl RtpH265UnPacker {
         }
 
         Ok(None)
-    }
-
-    fn is_fu_start(fu_header: u8) -> bool {
-        fu_header & FU_START > 0
-    }
-
-    fn is_fu_end(fu_header: u8) -> bool {
-        fu_header & FU_END > 0
     }
 }

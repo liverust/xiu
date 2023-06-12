@@ -24,18 +24,18 @@ impl RtpH264Packer {
         let mut nalu_reader = BytesReader::new(nalu);
         let byte_1st = nalu_reader.read_u8()?;
 
-        let fu_indicator: u8 = (byte_1st & 0xE0) | FU_A;
-        let mut fu_header: u8 = (byte_1st & 0x1F) | FU_START;
+        let fu_indicator: u8 = (byte_1st & 0xE0) | define::FU_A;
+        let mut fu_header: u8 = (byte_1st & 0x1F) | define::FU_START;
 
         let mut left_nalu_bytes: usize = nalu_reader.len();
         let mut fu_payload_len: usize;
 
         while left_nalu_bytes > 0 {
-            if left_nalu_bytes + RTP_FIXED_HEADER_LEN <= self.mtu - 2 {
-                fu_header = (byte_1st & 0x1F) | FU_END;
+            if left_nalu_bytes + define::RTP_FIXED_HEADER_LEN <= self.mtu - 2 {
+                fu_header = (byte_1st & 0x1F) | define::FU_END;
                 fu_payload_len = left_nalu_bytes;
             } else {
-                fu_payload_len = self.mtu - RTP_FIXED_HEADER_LEN - 2;
+                fu_payload_len = self.mtu - define::RTP_FIXED_HEADER_LEN - 2;
             }
 
             let fu_payload = nalu_reader.read_bytes(fu_payload_len)?;
@@ -44,7 +44,7 @@ impl RtpH264Packer {
             packet.payload.put_u8(fu_indicator);
             packet.payload.put_u8(fu_header);
             packet.payload.put(fu_payload);
-            packet.header.marker = if fu_header & FU_END > 0 { 1 } else { 0 };
+            packet.header.marker = if fu_header & define::FU_END > 0 { 1 } else { 0 };
 
             let packet_bytesmut = packet.pack()?;
             if let Some(f) = self.on_packet_handler {
@@ -81,7 +81,7 @@ impl TRtpPacker for RtpH264Packer {
     }
 
     fn pack_nalu(&mut self, nalu: BytesMut) -> Result<(), RtpPackerError> {
-        if nalu.len() + RTP_FIXED_HEADER_LEN <= self.mtu {
+        if nalu.len() + define::RTP_FIXED_HEADER_LEN <= self.mtu {
             self.pack_single(nalu)?;
         } else {
             self.pack_fu_a(nalu)?;
@@ -97,18 +97,6 @@ pub struct RtpH264UnPacker {
     flags: i16,
 }
 
-type RtpNalType = u8;
-
-pub const STAP_A: RtpNalType = 24;
-pub const STAP_B: RtpNalType = 25;
-pub const MTAP_16: RtpNalType = 26;
-pub const MTAP_24: RtpNalType = 27;
-pub const FU_A: RtpNalType = 28;
-pub const FU_B: RtpNalType = 29;
-pub const FU_START: u8 = 0x80;
-pub const FU_END: u8 = 0x40;
-pub const RTP_FIXED_HEADER_LEN: usize = 12;
-
 impl RtpH264UnPacker {
     pub fn unpack(&mut self, reader: &mut BytesReader) -> Result<Option<BytesMut>, BytesReadError> {
         let mut rtp_packet = RtpPacket::default();
@@ -119,13 +107,13 @@ impl RtpH264UnPacker {
                 1..=23 => {
                     return self.unpack_single(rtp_packet.payload.clone(), *packet_type);
                 }
-                STAP_A | STAP_B => {
+                define::STAP_A | define::STAP_B => {
                     return self.unpack_stap(rtp_packet.payload.clone(), *packet_type);
                 }
-                MTAP_16 | MTAP_24 => {
+                define::MTAP_16 | define::MTAP_24 => {
                     return self.unpack_mtap(rtp_packet.payload.clone(), *packet_type);
                 }
-                FU_A | FU_B => {
+                define::FU_A | define::FU_B => {
                     return self.unpack_fu(rtp_packet.payload.clone(), *packet_type);
                 }
                 _ => {}
@@ -138,7 +126,7 @@ impl RtpH264UnPacker {
     fn unpack_single(
         &mut self,
         rtp_payload: BytesMut,
-        t: RtpNalType,
+        t: define::RtpNalType,
     ) -> Result<Option<BytesMut>, BytesReadError> {
         return Ok(Some(rtp_payload));
     }
@@ -186,25 +174,25 @@ impl RtpH264UnPacker {
     fn unpack_fu(
         &mut self,
         rtp_payload: BytesMut,
-        t: RtpNalType,
+        t: define::RtpNalType,
     ) -> Result<Option<BytesMut>, BytesReadError> {
         let mut payload_reader = BytesReader::new(rtp_payload);
         let fu_indicator = payload_reader.read_u8()?;
         let fu_header = payload_reader.read_u8()?;
 
-        if t == FU_B {
+        if t == define::FU_B {
             //read DON
             payload_reader.read_u16::<BigEndian>()?;
         }
 
-        if Self::is_fu_start(fu_header) {
+        if utils::is_fu_start(fu_header) {
             self.fu_buffer
                 .put_u8((fu_indicator & 0xE0) | (fu_header & 0x1F))
         }
 
         self.fu_buffer.put(payload_reader.extract_remaining_bytes());
 
-        if Self::is_fu_end(fu_header) {
+        if utils::is_fu_end(fu_header) {
             let mut packet = BytesMut::new();
             packet.extend_from_slice(&define::ANNEXB_NALU_START_CODE);
             packet.put(self.fu_buffer.clone());
@@ -261,13 +249,13 @@ impl RtpH264UnPacker {
     fn unpack_stap(
         &mut self,
         rtp_payload: BytesMut,
-        t: RtpNalType,
+        t: define::RtpNalType,
     ) -> Result<Option<BytesMut>, BytesReadError> {
         let mut payload_reader = BytesReader::new(rtp_payload);
         //STAP-A / STAP-B HDR
         payload_reader.read_u8()?;
 
-        if t == STAP_B {
+        if t == define::STAP_B {
             //read DON
             payload_reader.read_u16::<BigEndian>()?;
         }
@@ -337,7 +325,7 @@ impl RtpH264UnPacker {
     fn unpack_mtap(
         &mut self,
         rtp_payload: BytesMut,
-        t: RtpNalType,
+        t: define::RtpNalType,
     ) -> Result<Option<BytesMut>, BytesReadError> {
         let mut payload_reader = BytesReader::new(rtp_payload);
         //read NAL HDR
@@ -352,9 +340,9 @@ impl RtpH264UnPacker {
             // read dond
             payload_reader.read_u8()?;
             // read TS offs
-            let (ts, ts_bytes) = if t == MTAP_16 {
+            let (ts, ts_bytes) = if t == define::MTAP_16 {
                 (payload_reader.read_u16::<BigEndian>()? as u32, 2_usize)
-            } else if t == MTAP_24 {
+            } else if t == define::MTAP_24 {
                 (payload_reader.read_u24::<BigEndian>()?, 3_usize)
             } else {
                 log::warn!("should not be here!");
@@ -367,13 +355,5 @@ impl RtpH264UnPacker {
         }
 
         Ok(Some(nalus))
-    }
-
-    fn is_fu_start(fu_header: u8) -> bool {
-        fu_header & FU_START > 0
-    }
-
-    fn is_fu_end(fu_header: u8) -> bool {
-        fu_header & FU_END > 0
     }
 }

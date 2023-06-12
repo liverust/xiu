@@ -1,9 +1,18 @@
+use super::define;
 use super::errors::RtpPackerError;
 use bytes::{BufMut, BytesMut};
 
 pub trait TRtpPacker {
     fn pack(&mut self, nalus: &mut BytesMut) -> Result<(), RtpPackerError>;
     fn pack_nalu(&mut self, nalu: BytesMut) -> Result<(), RtpPackerError>;
+}
+
+pub(super) fn is_fu_start(fu_header: u8) -> bool {
+    fu_header & define::FU_START > 0
+}
+
+pub(super) fn is_fu_end(fu_header: u8) -> bool {
+    fu_header & define::FU_END > 0
 }
 
 pub fn find_start_code(nalus: &[u8]) -> Option<usize> {
