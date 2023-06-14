@@ -122,3 +122,38 @@ impl From<RtpH265PackerError> for RtpPackerError {
         }
     }
 }
+
+impl fmt::Display for RtpPackerError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        fmt::Display::fmt(&self.value, f)
+    }
+}
+
+#[derive(Debug)]
+pub struct PackerError {
+    pub value: PackerErrorValue,
+}
+
+#[derive(Debug, Fail)]
+pub enum PackerErrorValue {
+    #[fail(display = "pack error: {}\n", _0)]
+    RtpPackerError(RtpPackerError),
+    #[fail(display = "bytes write error: {}\n", _0)]
+    BytesWriteError(#[cause] BytesWriteError),
+}
+
+impl From<RtpPackerError> for PackerError {
+    fn from(error: RtpPackerError) -> Self {
+        PackerError {
+            value: PackerErrorValue::RtpPackerError(error),
+        }
+    }
+}
+
+impl From<BytesWriteError> for PackerError {
+    fn from(error: BytesWriteError) -> Self {
+        PackerError {
+            value: PackerErrorValue::BytesWriteError(error),
+        }
+    }
+}

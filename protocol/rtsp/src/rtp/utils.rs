@@ -1,9 +1,12 @@
 use super::define;
+use super::errors::PackerError;
 use super::errors::RtpPackerError;
 use bytes::{BufMut, BytesMut};
 
-pub trait TRtpPacker {
-    fn pack(&mut self, nalus: &mut BytesMut) -> Result<(), RtpPackerError>;
+pub trait TPacker {
+    fn pack(&mut self, nalus: &mut BytesMut) -> Result<(), PackerError>;
+}
+pub trait TRtpPacker: TPacker {
     fn pack_nalu(&mut self, nalu: BytesMut) -> Result<(), RtpPackerError>;
 }
 

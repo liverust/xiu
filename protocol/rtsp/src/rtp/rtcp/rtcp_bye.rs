@@ -1,4 +1,7 @@
+use super::errors::RtcpError;
 use super::rtcp_header::RtcpHeader;
+use super::Marshal;
+use super::Unmarshal;
 use byteorder::BigEndian;
 use bytes::{BufMut, BytesMut};
 use bytesio::bytes_errors::BytesReadError;
@@ -16,30 +19,43 @@ use bytesio::bytes_writer::BytesWriter;
 // 	     +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+
 // (opt) |     length    |            reason for leaving     ...
 // 	     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
+#[derive(Debug, Clone, Default)]
 pub struct RtcpBye {
     header: RtcpHeader,
     ssrss: Vec<u32>,
     length: u8,
     reason: BytesMut,
 }
-impl RtcpBye {
-    pub fn unpack(&mut self, data: BytesMut) -> Result<(), BytesReadError> {
-        let mut reader = BytesReader::new(data);
-        self.header.unpack(&mut reader)?;
 
-        for _ in 0..self.header.report_count {
+impl Unmarshal<BytesMut, RtcpError> for RtcpBye {
+    fn unmarshal(data: BytesMut) -> Result<Self, RtcpError>
+    where
+        Self: Sized,
+    {
+        let mut reader = BytesReader::new(data);
+
+        let mut rtcp_bye = RtcpBye::default();
+        rtcp_bye.header = RtcpHeader::unmarshal(&mut reader)?;
+
+        for _ in 0..rtcp_bye.header.report_count {
             let ssrc = reader.read_u32::<BigEndian>()?;
-            self.ssrss.push(ssrc);
+            rtcp_bye.ssrss.push(ssrc);
         }
 
-        self.length = reader.read_u8()?;
-        self.reason = reader.read_bytes(self.length as usize)?;
+        rtcp_bye.length = reader.read_u8()?;
+        rtcp_bye.reason = reader.read_bytes(rtcp_bye.length as usize)?;
 
-        Ok(())
+        Ok(rtcp_bye)
     }
+}
 
-    pub fn pack(&mut self, writer: &mut BytesWriter) -> Result<(), BytesWriteError> {
-        self.header.pack(writer)?;
+impl Marshal<RtcpError> for RtcpBye {
+    fn marshal(&self) -> Result<BytesMut, RtcpError> {
+        let mut writer = BytesWriter::default();
+
+        let header_bytesmut = self.header.marshal()?;
+        writer.write(&header_bytesmut[..])?;
 
         for ssrc in &self.ssrss {
             writer.write_u32::<BigEndian>(*ssrc)?;
@@ -47,6 +63,7 @@ impl RtcpBye {
 
         writer.write_u8(self.length)?;
         writer.write(&self.reason[..])?;
-        Ok(())
+
+        Ok(writer.extract_current_bytes())
     }
 }

@@ -4,7 +4,8 @@ use indexmap::IndexMap;
 use std::io::{Read, Result};
 use std::net::TcpStream;
 
-use crate::global_trait::TMsgConverter;
+use crate::global_trait::Marshal;
+use crate::global_trait::Unmarshal;
 
 #[derive(Debug, Clone, Default)]
 pub struct RtspRequest {
@@ -15,7 +16,7 @@ pub struct RtspRequest {
     pub body: Option<String>,
 }
 
-impl TMsgConverter for RtspRequest {
+impl Unmarshal for RtspRequest {
     fn unmarshal(request_data: &str) -> Option<Self> {
         let mut rtsp_request = RtspRequest::default();
         let header_end_idx = if let Some(idx) = request_data.find("\r\n\r\n") {
@@ -54,6 +55,9 @@ impl TMsgConverter for RtspRequest {
 
         Some(rtsp_request)
     }
+}
+
+impl Marshal for RtspRequest {
     fn marshal(&self) -> String {
         let mut request_str = format!("{} {} {}\r\n", self.method, self.url, self.version);
         for (header_name, header_value) in &self.headers {
@@ -81,7 +85,7 @@ pub struct RtspResponse {
     pub body: Option<String>,
 }
 
-impl TMsgConverter for RtspResponse {
+impl Unmarshal for RtspResponse {
     fn unmarshal(request_data: &str) -> Option<Self> {
         let mut rtsp_response = RtspResponse::default();
         let header_end_idx = if let Some(idx) = request_data.find("\r\n\r\n") {
@@ -123,7 +127,9 @@ impl TMsgConverter for RtspResponse {
 
         Some(rtsp_response)
     }
+}
 
+impl Marshal for RtspResponse {
     fn marshal(&self) -> String {
         let mut response_str = format!(
             "{} {} {}\r\n",
@@ -148,7 +154,7 @@ impl TMsgConverter for RtspResponse {
 #[cfg(test)]
 mod tests {
 
-    use crate::http::parser::TMsgConverter;
+    use crate::{global_trait::Marshal, http::parser::Unmarshal};
 
     use super::RtspRequest;
 
@@ -240,7 +246,7 @@ mod tests {
         // a=rtpmap:96 H264/90000：视频流所使用的编码方式(H.264)和时钟频率(90000)。
         // a=fmtp:96 packetization-mode=1; sprop-parameter-sets=Z2QAHqzZQKAv+XARAAADAAEAAAMAMg8WLZY=,aOvjyyLA; profile-level-id=64001E：视频流的格式参数，如分片方式、SPS和PPS等。
         // a=control:streamid=0：指定视频流的流ID。
-        
+
         // m=audio 0 RTP/AVP 97：媒体类型(audio)、媒体格式(RTP/AVP)、媒体格式编号(97)和媒体流的传输地址。
         // b=AS:128：音频流所使用的带宽大小。
         // a=rtpmap:97 MPEG4-GENERIC/48000/2：音频流所使用的编码方式(MPEG4-GENERIC)、采样率(48000Hz)、和通道数(2)。

@@ -1,4 +1,8 @@
+use super::errors::RtcpError;
+use super::Marshal;
+use super::Unmarshal;
 use byteorder::BigEndian;
+use bytes::{BufMut, BytesMut};
 use bytesio::bits_reader::BitsReader;
 use bytesio::bytes_errors::BytesReadError;
 use bytesio::bytes_errors::BytesWriteError;
@@ -19,19 +23,28 @@ pub struct RtcpHeader {
     pub length: u16,      // 16 bits
 }
 
-impl RtcpHeader {
-    pub fn unpack(&mut self, reader: &mut BytesReader) -> Result<(), BytesReadError> {
+impl Unmarshal<&mut BytesReader, RtcpError> for RtcpHeader {
+    fn unmarshal(reader: &mut BytesReader) -> Result<Self, RtcpError>
+    where
+        Self: Sized,
+    {
+        let mut rtcp_header = RtcpHeader::default();
+
         let byte_1st: u8 = reader.read_u8()?;
-        self.version = byte_1st >> 6;
-        self.padding_flag = (byte_1st >> 5) & 0x01;
-        self.report_count = byte_1st & 0x1F;
-        self.payload_type = reader.read_u8()?;
-        self.length = reader.read_u16::<BigEndian>()?;
+        rtcp_header.version = byte_1st >> 6;
+        rtcp_header.padding_flag = (byte_1st >> 5) & 0x01;
+        rtcp_header.report_count = byte_1st & 0x1F;
+        rtcp_header.payload_type = reader.read_u8()?;
+        rtcp_header.length = reader.read_u16::<BigEndian>()?;
 
-        Ok(())
+        Ok(rtcp_header)
     }
+}
 
-    pub fn pack(&mut self, writer: &mut BytesWriter) -> Result<(), BytesWriteError> {
+impl Marshal<RtcpError> for RtcpHeader {
+    fn marshal(&self) -> Result<BytesMut, RtcpError> {
+        let mut writer = BytesWriter::default();
+
         let byte_1st: u8 =
             (self.version << 6) | (self.padding_flag << 5) | (self.report_count << 3);
 
@@ -39,6 +52,6 @@ impl RtcpHeader {
         writer.write_u8(self.payload_type)?;
         writer.write_u16::<BigEndian>(self.length)?;
 
-        Ok(())
+        Ok(writer.extract_current_bytes())
     }
 }

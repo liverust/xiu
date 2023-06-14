@@ -3,8 +3,10 @@ use std::ptr::NonNull;
 use super::define;
 use super::errors::RtpH265PackerError;
 
+use super::errors::PackerError;
 use super::errors::RtpPackerError;
 use super::utils;
+use super::utils::TPacker;
 use super::utils::TRtpPacker;
 use super::RtpHeader;
 use super::RtpPacket;
@@ -98,12 +100,15 @@ impl RtpH265Packer {
         Ok(())
     }
 }
-impl TRtpPacker for RtpH265Packer {
-    fn pack(&mut self, nalus: &mut BytesMut) -> Result<(), RtpPackerError> {
+
+impl TPacker for RtpH265Packer {
+    fn pack(&mut self, nalus: &mut BytesMut) -> Result<(), PackerError> {
         utils::split_annexb_and_process(nalus, self)?;
         Ok(())
     }
+}
 
+impl TRtpPacker for RtpH265Packer {
     fn pack_nalu(&mut self, nalu: BytesMut) -> Result<(), RtpPackerError> {
         if nalu.len() + define::RTP_FIXED_HEADER_LEN <= self.mtu {
             self.pack_single(nalu)?;

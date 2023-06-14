@@ -1,7 +1,7 @@
 pub mod fmtp;
 pub mod rtpmap;
 
-use crate::global_trait::TMsgConverter;
+use crate::global_trait::{Marshal, Unmarshal};
 
 use failure::Backtrace;
 use rtpmap::RtpMap;
@@ -15,7 +15,7 @@ pub struct Bandwidth {
     bandwidth: u16,
 }
 
-impl TMsgConverter for Bandwidth {
+impl Unmarshal for Bandwidth {
     //   b=AS:284\r\n\
     fn unmarshal(raw_data: &str) -> Option<Self> {
         let mut sdp_bandwidth = Bandwidth::default();
@@ -33,7 +33,9 @@ impl TMsgConverter for Bandwidth {
 
         Some(sdp_bandwidth)
     }
+}
 
+impl Marshal for Bandwidth {
     fn marshal(&self) -> String {
         format!("{}:{}\r\n", self.b_type, self.bandwidth)
     }
@@ -95,7 +97,7 @@ struct Sdp {
     attributes: HashMap<String, String>,
 }
 
-impl TMsgConverter for SdpMediaInfo {
+impl Unmarshal for SdpMediaInfo {
     //m=audio 11704 RTP/AVP 96 97 98 0 8 18 101 99 100 */
     //m=video 20003 RTP/AVP 97
     fn unmarshal(raw_data: &str) -> Option<Self> {
@@ -125,12 +127,15 @@ impl TMsgConverter for SdpMediaInfo {
         }
         Some(sdp_media)
     }
+}
+
+impl Marshal for SdpMediaInfo {
     fn marshal(&self) -> String {
         String::default()
     }
 }
 
-impl TMsgConverter for Sdp {
+impl Unmarshal for Sdp {
     fn unmarshal(raw_data: &str) -> Option<Self> {
         let mut sdp = Sdp::default();
         sdp.raw_string = raw_data.to_string();
@@ -246,6 +251,9 @@ impl TMsgConverter for Sdp {
 
         Some(sdp)
     }
+}
+
+impl Marshal for Sdp {
     fn marshal(&self) -> String {
         String::default()
     }
@@ -254,7 +262,7 @@ impl TMsgConverter for Sdp {
 #[cfg(test)]
 mod tests {
 
-    use crate::global_trait::TMsgConverter;
+    use crate::global_trait::Unmarshal;
 
     use super::Sdp;
     use indexmap::IndexMap;

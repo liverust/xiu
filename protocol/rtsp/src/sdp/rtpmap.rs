@@ -1,4 +1,4 @@
-use crate::global_trait::TMsgConverter;
+use crate::global_trait::{Marshal, Unmarshal};
 
 #[derive(Debug, Clone, Default)]
 pub struct RtpMap {
@@ -8,7 +8,7 @@ pub struct RtpMap {
     encoding_param: String,
 }
 
-impl TMsgConverter for RtpMap {
+impl Unmarshal for RtpMap {
     fn unmarshal(raw_data: &str) -> Option<Self> {
         let mut rtpmap = RtpMap::default();
 
@@ -35,7 +35,9 @@ impl TMsgConverter for RtpMap {
 
         Some(rtpmap)
     }
+}
 
+impl Marshal for RtpMap {
     fn marshal(&self) -> String {
         String::default()
     }
@@ -44,7 +46,7 @@ impl TMsgConverter for RtpMap {
 #[cfg(test)]
 mod tests {
 
-    use crate::global_trait::TMsgConverter;
+    use crate::global_trait::Unmarshal;
 
     use super::RtpMap;
 

@@ -1,4 +1,6 @@
-use super::global_trait::TMsgConverter;
+use crate::global_trait::Marshal;
+
+use super::global_trait::Unmarshal;
 use super::rtsp_utils;
 
 #[derive(Debug, Clone, Default, PartialEq)]
@@ -15,7 +17,7 @@ pub struct RtspRange {
     end: Option<i64>,
 }
 
-impl TMsgConverter for RtspRange {
+impl Unmarshal for RtspRange {
     fn unmarshal(raw_data: &str) -> Option<Self> {
         let mut rtsp_range = RtspRange::default();
 
@@ -84,7 +86,9 @@ impl TMsgConverter for RtspRange {
 
         Some(rtsp_range)
     }
+}
 
+impl Marshal for RtspRange {
     fn marshal(&self) -> String {
         String::default()
     }
@@ -94,7 +98,7 @@ impl TMsgConverter for RtspRange {
 mod tests {
 
     use super::RtspRange;
-    use crate::global_trait::TMsgConverter;
+    use crate::global_trait::Unmarshal;
 
     #[test]
     fn test_parse_transport() {

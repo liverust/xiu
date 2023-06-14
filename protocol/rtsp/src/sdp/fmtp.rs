@@ -1,4 +1,4 @@
-use crate::global_trait::TMsgConverter;
+use crate::global_trait::{Marshal, Unmarshal};
 use bytes::BytesMut;
 
 // pub trait Fmtp: TMsgConverter {}
@@ -57,7 +57,7 @@ impl Fmtp {
 }
 
 // a=fmtp:96 packetization-mode=1; sprop-parameter-sets=Z2QAFqyyAUBf8uAiAAADAAIAAAMAPB4sXJA=,aOvDyyLA; profile-level-id=640016
-impl TMsgConverter for H264Fmtp {
+impl Unmarshal for H264Fmtp {
     fn unmarshal(raw_data: &str) -> Option<Self> {
         let mut h264_fmtp = H264Fmtp::default();
         let eles: Vec<&str> = raw_data.splitn(2, ' ').collect();
@@ -95,12 +95,15 @@ impl TMsgConverter for H264Fmtp {
 
         Some(h264_fmtp)
     }
+}
+
+impl Marshal for H264Fmtp {
     fn marshal(&self) -> String {
         String::default()
     }
 }
 
-impl TMsgConverter for H265Fmtp {
+impl Unmarshal for H265Fmtp {
     //"a=fmtp:96 sprop-vps=QAEMAf//AWAAAAMAkAAAAwAAAwA/ugJA; sprop-sps=QgEBAWAAAAMAkAAAAwAAAwA/oAUCAXHy5bpKTC8BAQAAAwABAAADAA8I; sprop-pps=RAHAc8GJ"
     fn unmarshal(raw_data: &str) -> Option<Self> {
         let mut h265_fmtp = H265Fmtp::default();
@@ -136,12 +139,15 @@ impl TMsgConverter for H265Fmtp {
 
         Some(h265_fmtp)
     }
+}
+
+impl Marshal for H265Fmtp {
     fn marshal(&self) -> String {
         String::default()
     }
 }
 
-impl TMsgConverter for Mpeg4Fmtp {
+impl Unmarshal for Mpeg4Fmtp {
     //a=fmtp:97 profile-level-id=1;mode=AAC-hbr;sizelength=13;indexlength=3;indexdeltalength=3; config=121056e500
     fn unmarshal(raw_data: &str) -> Option<Self> {
         let mut mpeg4_fmtp = Mpeg4Fmtp::default();
@@ -191,6 +197,9 @@ impl TMsgConverter for Mpeg4Fmtp {
 
         Some(mpeg4_fmtp)
     }
+}
+
+impl Marshal for Mpeg4Fmtp {
     fn marshal(&self) -> String {
         String::default()
     }
@@ -202,7 +211,7 @@ mod tests {
     use super::H264Fmtp;
     use super::H265Fmtp;
     use super::Mpeg4Fmtp;
-    use crate::global_trait::TMsgConverter;
+    use crate::global_trait::Unmarshal;
 
     #[test]
     fn test_parse_h264fmtpsdp() {

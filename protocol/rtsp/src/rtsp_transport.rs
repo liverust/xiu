@@ -1,4 +1,6 @@
-use super::global_trait::TMsgConverter;
+use crate::global_trait::Marshal;
+
+use super::global_trait::Unmarshal;
 use super::rtsp_utils::scanf;
 
 #[derive(Debug, Clone, Default, PartialEq)]
@@ -25,7 +27,7 @@ pub struct RtspTransport {
     ssrc: u32,
 }
 
-impl TMsgConverter for RtspTransport {
+impl Unmarshal for RtspTransport {
     fn unmarshal(raw_data: &str) -> Option<Self> {
         let mut rtsp_transport = RtspTransport::default();
 
@@ -87,7 +89,9 @@ impl TMsgConverter for RtspTransport {
 
         Some(rtsp_transport)
     }
+}
 
+impl Marshal for RtspTransport {
     fn marshal(&self) -> String {
         String::default()
     }
@@ -96,7 +100,7 @@ impl TMsgConverter for RtspTransport {
 #[cfg(test)]
 mod tests {
 
-    use crate::global_trait::TMsgConverter;
+    use crate::global_trait::Unmarshal;
 
     use super::CastType;
     use super::ProtocolType;

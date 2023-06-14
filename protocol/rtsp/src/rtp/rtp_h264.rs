@@ -1,7 +1,9 @@
 use super::define;
+use super::errors::PackerError;
 use super::errors::RtpH264PackerError;
 use super::errors::RtpPackerError;
 use super::utils;
+use super::utils::TPacker;
 use super::utils::TRtpPacker;
 use super::RtpHeader;
 use super::RtpPacket;
@@ -73,13 +75,15 @@ impl RtpH264Packer {
     }
 }
 
-impl TRtpPacker for RtpH264Packer {
+impl TPacker for RtpH264Packer {
     //pack annexb h264 data
-    fn pack(&mut self, nalus: &mut BytesMut) -> Result<(), RtpPackerError> {
+    fn pack(&mut self, nalus: &mut BytesMut) -> Result<(), PackerError> {
         utils::split_annexb_and_process(nalus, self)?;
         Ok(())
     }
+}
 
+impl TRtpPacker for RtpH264Packer {
     fn pack_nalu(&mut self, nalu: BytesMut) -> Result<(), RtpPackerError> {
         if nalu.len() + define::RTP_FIXED_HEADER_LEN <= self.mtu {
             self.pack_single(nalu)?;

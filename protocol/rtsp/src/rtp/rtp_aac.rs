@@ -1,7 +1,9 @@
 use super::define;
+use super::errors::PackerError;
 use super::errors::RtpH264PackerError;
 use super::errors::RtpPackerError;
 use super::utils;
+use super::utils::TPacker;
 use super::utils::TRtpPacker;
 use super::RtpHeader;
 use super::RtpPacket;
@@ -19,8 +21,8 @@ pub struct RtpAacPacker {
     on_packet_handler: Option<OnPacketFn>,
 }
 
-impl RtpAacPacker {
-    fn pack(&self, data: &mut BytesMut) -> Result<(), RtpH264PackerError> {
+impl TPacker for RtpAacPacker {
+    fn pack(&mut self, data: &mut BytesMut) -> Result<(), PackerError> {
         let data_len = data.len();
 
         let mut packet = RtpPacket::new(self.header.clone());

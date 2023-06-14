@@ -1,4 +1,7 @@
+use super::errors::RtcpError;
 use super::rtcp_header::RtcpHeader;
+use super::Marshal;
+use super::Unmarshal;
 use byteorder::BigEndian;
 use bytes::{BufMut, BytesMut};
 use bytesio::bytes_errors::BytesReadError;
@@ -17,6 +20,7 @@ use bytesio::bytes_writer::BytesWriter;
 // +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 // |                   application-dependent data                ...
 // +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+#[derive(Debug, Clone, Default)]
 pub struct RtcpApp {
     header: RtcpHeader,
     ssrc: u32,
@@ -24,24 +28,34 @@ pub struct RtcpApp {
     app_data: BytesMut,
 }
 
-impl RtcpApp {
-    pub fn unpack(&mut self, data: BytesMut) -> Result<(), BytesReadError> {
+impl Unmarshal<BytesMut, RtcpError> for RtcpApp {
+    fn unmarshal(data: BytesMut) -> Result<Self, RtcpError>
+    where
+        Self: Sized,
+    {
+        let mut rtcp_app = RtcpApp::default();
         let mut reader = BytesReader::new(data);
-        self.header.unpack(&mut reader)?;
+        rtcp_app.header = RtcpHeader::unmarshal(&mut reader)?;
 
-        self.ssrc = reader.read_u32::<BigEndian>()?;
-        self.name = reader.read_bytes(4)?;
-        self.app_data = reader.read_bytes(self.header.length as usize * 4)?;
+        rtcp_app.ssrc = reader.read_u32::<BigEndian>()?;
+        rtcp_app.name = reader.read_bytes(4)?;
+        rtcp_app.app_data = reader.read_bytes(rtcp_app.header.length as usize * 4)?;
 
-        Ok(())
+        Ok(rtcp_app)
     }
+}
 
-    pub fn pack(&mut self, writer: &mut BytesWriter) -> Result<(), BytesWriteError> {
-        self.header.pack(writer)?;
+impl Marshal<RtcpError> for RtcpApp {
+    fn marshal(&self) -> Result<BytesMut, RtcpError> {
+        let mut writer = BytesWriter::default();
+
+        let header_bytesmut = self.header.marshal()?;
+        writer.write(&header_bytesmut[..])?;
 
         writer.write_u32::<BigEndian>(self.ssrc)?;
         writer.write(&self.name[..])?;
         writer.write(&self.app_data[..])?;
-        Ok(())
+
+        Ok(writer.extract_current_bytes())
     }
 }
