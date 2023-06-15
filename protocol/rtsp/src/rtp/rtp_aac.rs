@@ -2,9 +2,11 @@ use super::define;
 use super::errors::PackerError;
 use super::errors::UnPackerError;
 use super::utils;
+use super::utils::Marshal;
 use super::utils::TPacker;
 use super::utils::TRtpPacker;
 use super::utils::TUnPacker;
+use super::utils::Unmarshal;
 use super::RtpHeader;
 use super::RtpPacket;
 use byteorder::BigEndian;
@@ -31,7 +33,7 @@ impl TPacker for RtpAacPacker {
         packet.payload.put_u8(((data_len & 0x1F) << 3) as u8);
         packet.payload.put(data);
 
-        let packet_data = packet.pack()?;
+        let packet_data = packet.marshal()?;
         if let Some(f) = self.on_packet_handler {
             f(packet_data);
         }
@@ -64,8 +66,8 @@ pub struct RtpAacUnPacker {
 
 impl TUnPacker for RtpAacUnPacker {
     fn unpack(&mut self, reader: &mut BytesReader) -> Result<(), UnPackerError> {
-        let mut rtp_packet = RtpPacket::default();
-        rtp_packet.unpack(reader)?;
+        let mut rtp_packet = RtpPacket::unmarshal(reader)?;
+
         let au_headers_length = (reader.read_u16::<BigEndian>()? + 7) / 8;
         let au_header_length = 2;
         let aus_number = au_headers_length / au_header_length;

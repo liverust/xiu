@@ -1,9 +1,13 @@
 use byteorder::BigEndian;
+use bytes::BytesMut;
 use bytesio::bits_reader::BitsReader;
 use bytesio::bytes_errors::BytesReadError;
 use bytesio::bytes_errors::BytesWriteError;
 use bytesio::bytes_reader::BytesReader;
 use bytesio::bytes_writer::BytesWriter;
+
+use super::utils::Marshal;
+use super::utils::Unmarshal;
 
 #[derive(Debug, Clone, Default)]
 pub struct RtpHeader {
@@ -19,28 +23,35 @@ pub struct RtpHeader {
     pub csrcs: Vec<u32>,
 }
 
-impl RtpHeader {
-    pub fn unpack(&mut self, reader: &mut BytesReader) -> Result<(), BytesReadError> {
+impl Unmarshal<&mut BytesReader, Result<Self, BytesReadError>> for RtpHeader {
+    fn unmarshal(reader: &mut BytesReader) -> Result<Self, BytesReadError>
+    where
+        Self: Sized,
+    {
+        let mut rtp_header = RtpHeader::default();
+
         let byte_1st: u8 = reader.read_u8()?;
-        self.version = byte_1st >> 6;
-        self.padding_flag = byte_1st >> 5 & 0x01;
-        self.extension_flag = byte_1st >> 4 & 0x01;
-        self.cc = byte_1st & 0x0F;
+        rtp_header.version = byte_1st >> 6;
+        rtp_header.padding_flag = byte_1st >> 5 & 0x01;
+        rtp_header.extension_flag = byte_1st >> 4 & 0x01;
+        rtp_header.cc = byte_1st & 0x0F;
 
         let byte_2nd = reader.read_u8()?;
-        self.marker = byte_2nd >> 7;
-        self.payload_type = byte_2nd & 0x7F;
-        self.seq_number = reader.read_u16::<BigEndian>()?;
-        self.timestamp = reader.read_u32::<BigEndian>()?;
-        self.ssrc = reader.read_u32::<BigEndian>()?;
+        rtp_header.marker = byte_2nd >> 7;
+        rtp_header.payload_type = byte_2nd & 0x7F;
+        rtp_header.seq_number = reader.read_u16::<BigEndian>()?;
+        rtp_header.timestamp = reader.read_u32::<BigEndian>()?;
+        rtp_header.ssrc = reader.read_u32::<BigEndian>()?;
 
-        for _ in 0..self.cc {
-            self.csrcs.push(reader.read_u32::<BigEndian>()?);
+        for _ in 0..rtp_header.cc {
+            rtp_header.csrcs.push(reader.read_u32::<BigEndian>()?);
         }
 
-        Ok(())
+        Ok(rtp_header)
     }
+}
 
+impl Marshal<Result<BytesMut, BytesWriteError>> for RtpHeader {
     //  0                   1                   2                   3
     //  0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
     // +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
@@ -53,8 +64,9 @@ impl RtpHeader {
     // |            contributing source (CSRC) identifiers             |
     // |                             ....                              |
     // +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    fn marshal(&self) -> Result<BytesMut, BytesWriteError> {
+        let mut writer = BytesWriter::default();
 
-    pub fn pack(&mut self, writer: &mut BytesWriter) -> Result<(), BytesWriteError> {
         let byte_1st: u8 = (self.version << 6)
             | (self.padding_flag << 5)
             | (self.extension_flag << 4)
@@ -72,6 +84,6 @@ impl RtpHeader {
             writer.write_u32::<BigEndian>(*csrc)?;
         }
 
-        Ok(())
+        Ok(writer.extract_current_bytes())
     }
 }

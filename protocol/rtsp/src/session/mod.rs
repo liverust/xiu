@@ -24,11 +24,8 @@ use uuid::Uuid;
 pub struct RtspServerSession {
     reader: AsyncBytesReader,
     writer: AsyncBytesWriter,
-
     bytesio_data: BytesMut,
-
     transport: RtspTransport,
-
     pub session_id: Uuid,
 }
 

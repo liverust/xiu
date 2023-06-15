@@ -5,6 +5,16 @@ use bytesio::bytes_reader::BytesReader;
 
 use bytes::{BufMut, BytesMut};
 
+pub trait Unmarshal<T1, T2> {
+    fn unmarshal(data: T1) -> T2
+    where
+        Self: Sized;
+}
+
+pub trait Marshal<T> {
+    fn marshal(&self) -> T;
+}
+
 pub trait TPacker {
     fn pack(&mut self, nalus: &mut BytesMut) -> Result<(), PackerError>;
 }

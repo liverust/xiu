@@ -6,9 +6,11 @@ use super::errors::PackerError;
 use super::errors::UnPackerError;
 
 use super::utils;
+use super::utils::Marshal;
 use super::utils::TPacker;
 use super::utils::TRtpPacker;
 use super::utils::TUnPacker;
+use super::utils::Unmarshal;
 use super::RtpHeader;
 use super::RtpPacket;
 use byteorder::BigEndian;
@@ -77,7 +79,7 @@ impl RtpH265Packer {
             packet.payload.put(fu_payload);
             packet.header.marker = if fu_header & define::FU_END > 0 { 1 } else { 0 };
 
-            let packet_bytesmut = packet.pack()?;
+            let packet_bytesmut = packet.marshal()?;
             if let Some(f) = self.on_packet_handler {
                 f(packet_bytesmut)?;
             }
@@ -92,7 +94,7 @@ impl RtpH265Packer {
         packet.header.marker = 1;
         packet.payload.put(nalu);
 
-        let packet_bytesmut = packet.pack()?;
+        let packet_bytesmut = packet.marshal()?;
         self.header.seq_number += 1;
 
         if let Some(f) = self.on_packet_handler {
@@ -120,7 +122,7 @@ impl TRtpPacker for RtpH265Packer {
     }
 }
 
-pub type OnFrameFn = fn(BytesMut) -> Result<(), PackerError>;
+pub type OnFrameFn = fn(BytesMut) -> Result<(), UnPackerError>;
 pub struct RtpH265UnPacker {
     sequence_number: u16,
     timestamp: u32,
@@ -132,8 +134,7 @@ pub struct RtpH265UnPacker {
 
 impl TUnPacker for RtpH265UnPacker {
     fn unpack(&mut self, reader: &mut BytesReader) -> Result<(), UnPackerError> {
-        let mut rtp_packet = RtpPacket::default();
-        rtp_packet.unpack(reader)?;
+        let mut rtp_packet = RtpPacket::unmarshal(reader)?;
 
         if let Some(packet_type) = rtp_packet.payload.get(0) {
             match *packet_type >> 1 & 0x3F {
@@ -159,7 +160,7 @@ impl TUnPacker for RtpH265UnPacker {
 impl RtpH265UnPacker {
     fn unpack_single(&mut self, rtp_payload: BytesMut) -> Result<(), UnPackerError> {
         if let Some(f) = self.on_frame_handler {
-            f(rtp_payload);
+            f(rtp_payload)?;
         }
         return Ok(());
     }
@@ -193,7 +194,6 @@ impl RtpH265UnPacker {
         /*read PayloadHdr*/
         payload_reader.read_bytes(2)?;
 
-        let mut nalus = BytesMut::new();
         while payload_reader.len() > 0 {
             if self.using_donl_field {
                 /*read DONL*/
@@ -208,7 +208,7 @@ impl RtpH265UnPacker {
             frame.extend_from_slice(&define::ANNEXB_NALU_START_CODE);
             frame.put(nalu);
             if let Some(f) = self.on_frame_handler {
-                f(frame);
+                f(frame)?;
             }
         }
 
@@ -274,7 +274,7 @@ impl RtpH265UnPacker {
             self.fu_buffer.clear();
 
             if let Some(f) = self.on_frame_handler {
-                f(frame);
+                f(frame)?;
             }
         }
 

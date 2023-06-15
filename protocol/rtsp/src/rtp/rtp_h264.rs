@@ -2,9 +2,11 @@ use super::define;
 use super::errors::PackerError;
 use super::errors::UnPackerError;
 use super::utils;
+use super::utils::Marshal;
 use super::utils::TPacker;
 use super::utils::TRtpPacker;
 use super::utils::TUnPacker;
+use super::utils::Unmarshal;
 use super::RtpHeader;
 use super::RtpPacket;
 use byteorder::BigEndian;
@@ -48,7 +50,7 @@ impl RtpH264Packer {
             packet.payload.put(fu_payload);
             packet.header.marker = if fu_header & define::FU_END > 0 { 1 } else { 0 };
 
-            let packet_bytesmut = packet.pack()?;
+            let packet_bytesmut = packet.marshal()?;
             if let Some(f) = self.on_packet_handler {
                 f(packet_bytesmut)?;
             }
@@ -64,7 +66,7 @@ impl RtpH264Packer {
         packet.header.marker = 1;
         packet.payload.put(nalu);
 
-        let packet_bytesmut = packet.pack()?;
+        let packet_bytesmut = packet.marshal()?;
         self.header.seq_number += 1;
 
         if let Some(f) = self.on_packet_handler {
@@ -105,8 +107,7 @@ pub struct RtpH264UnPacker {
 
 impl TUnPacker for RtpH264UnPacker {
     fn unpack(&mut self, reader: &mut BytesReader) -> Result<(), UnPackerError> {
-        let mut rtp_packet = RtpPacket::default();
-        rtp_packet.unpack(reader)?;
+        let rtp_packet = RtpPacket::unmarshal(reader)?;
 
         if let Some(packet_type) = rtp_packet.payload.get(0) {
             match *packet_type & 0x1F {

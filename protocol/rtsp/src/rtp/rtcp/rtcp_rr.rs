@@ -1,7 +1,7 @@
 use super::errors::RtcpError;
 use super::rtcp_header::RtcpHeader;
-use super::Marshal;
-use super::Unmarshal;
+use crate::rtp::utils::Marshal;
+use crate::rtp::utils::Unmarshal;
 use byteorder::BigEndian;
 use bytes::{BufMut, BytesMut};
 use bytesio::bytes_errors::BytesReadError;
@@ -20,7 +20,7 @@ struct ReportBlock {
     dlsr: u32,
 }
 
-impl Unmarshal<&mut BytesReader, RtcpError> for ReportBlock {
+impl Unmarshal<&mut BytesReader, Result<Self, RtcpError>> for ReportBlock {
     fn unmarshal(reader: &mut BytesReader) -> Result<Self, RtcpError>
     where
         Self: Sized,
@@ -39,7 +39,7 @@ impl Unmarshal<&mut BytesReader, RtcpError> for ReportBlock {
     }
 }
 
-impl Marshal<RtcpError> for ReportBlock {
+impl Marshal<Result<BytesMut, RtcpError>> for ReportBlock {
     fn marshal(&self) -> Result<BytesMut, RtcpError> {
         let mut writer = BytesWriter::default();
 
@@ -62,7 +62,7 @@ pub struct ReceiverReport {
     report_blocks: Vec<ReportBlock>,
 }
 
-impl Unmarshal<BytesMut, RtcpError> for ReceiverReport {
+impl Unmarshal<BytesMut, Result<Self, RtcpError>> for ReceiverReport {
     fn unmarshal(data: BytesMut) -> Result<Self, RtcpError>
     where
         Self: Sized,
@@ -82,7 +82,7 @@ impl Unmarshal<BytesMut, RtcpError> for ReceiverReport {
     }
 }
 
-impl Marshal<RtcpError> for ReceiverReport {
+impl Marshal<Result<BytesMut, RtcpError>> for ReceiverReport {
     fn marshal(&self) -> Result<BytesMut, RtcpError> {
         let mut writer = BytesWriter::default();
 

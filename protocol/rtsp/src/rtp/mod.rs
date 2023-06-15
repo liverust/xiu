@@ -15,7 +15,9 @@ use bytesio::bytes_reader::BytesReader;
 use bytesio::bytes_writer::BytesWriter;
 use rtp_header::RtpHeader;
 
+use self::utils::Marshal;
 use self::utils::TPacker;
+use self::utils::Unmarshal;
 
 #[derive(Debug, Clone, Default)]
 pub struct RtpPacket {
@@ -27,18 +29,16 @@ pub struct RtpPacket {
     pub padding: BytesMut,
 }
 
-impl RtpPacket {
-    fn new(header: RtpHeader) -> Self {
-        Self {
-            header,
-            ..Default::default()
-        }
-    }
+impl Unmarshal<&mut BytesReader, Result<Self, BytesReadError>> for RtpPacket {
     //https://blog.jianchihu.net/webrtc-research-rtp-header-extension.html
-    pub fn unpack(&mut self, reader: &mut BytesReader) -> Result<(), BytesReadError> {
-        self.header.unpack(reader)?;
+    fn unmarshal(reader: &mut BytesReader) -> Result<Self, BytesReadError>
+    where
+        Self: Sized,
+    {
+        let mut rtp_packet = RtpPacket::default();
+        rtp_packet.header = RtpHeader::unmarshal(reader)?;
 
-        if self.header.extension_flag == 1 {
+        if rtp_packet.header.extension_flag == 1 {
             // 0                   1                   2                   3
             // 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
             // +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
@@ -47,25 +47,30 @@ impl RtpPacket {
             // |                        header extension                       |
             // |                             ....                              |
             // header_extension = profile(2 bytes) + length(2 bytes) + header extension payload
-            self.header_extension_profile = reader.read_u16::<BigEndian>()?;
-            self.header_extension_length = reader.read_u16::<BigEndian>()?;
-            self.header_extension_payload =
-                reader.read_bytes(4 * self.header_extension_length as usize)?;
+            rtp_packet.header_extension_profile = reader.read_u16::<BigEndian>()?;
+            rtp_packet.header_extension_length = reader.read_u16::<BigEndian>()?;
+            rtp_packet.header_extension_payload =
+                reader.read_bytes(4 * rtp_packet.header_extension_length as usize)?;
         }
 
-        if self.header.padding_flag == 1 {
+        if rtp_packet.header.padding_flag == 1 {
             let padding_length = reader.get(reader.len() - 1)? as usize;
-            self.payload
+            rtp_packet
+                .payload
                 .put(reader.read_bytes(reader.len() - padding_length)?);
-            self.padding.put(reader.extract_remaining_bytes());
+            rtp_packet.padding.put(reader.extract_remaining_bytes());
         }
 
-        Ok(())
+        Ok(rtp_packet)
     }
-    pub fn pack(&mut self) -> Result<BytesMut, BytesWriteError> {
+}
+
+impl Marshal<Result<BytesMut, BytesWriteError>> for RtpPacket {
+    fn marshal(&self) -> Result<BytesMut, BytesWriteError> {
         let mut writer = BytesWriter::new();
 
-        self.header.pack(&mut writer)?;
+        let header_bytesmut = self.header.marshal()?;
+        writer.write(&header_bytesmut[..])?;
 
         writer.write_u16::<BigEndian>(self.header_extension_profile)?;
         writer.write_u16::<BigEndian>(self.header_extension_length)?;
@@ -76,4 +81,56 @@ impl RtpPacket {
 
         Ok(writer.extract_current_bytes())
     }
+}
+
+impl RtpPacket {
+    fn new(header: RtpHeader) -> Self {
+        Self {
+            header,
+            ..Default::default()
+        }
+    }
+
+    // pub fn unpack(&mut self, reader: &mut BytesReader) -> Result<(), BytesReadError> {
+    //     self.header = RtpHeader::unmarshal(reader)?;
+
+    //     if self.header.extension_flag == 1 {
+    //         // 0                   1                   2                   3
+    //         // 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+    //         // +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    //         // |      defined by profile       |           length              |
+    //         // +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    //         // |                        header extension                       |
+    //         // |                             ....                              |
+    //         // header_extension = profile(2 bytes) + length(2 bytes) + header extension payload
+    //         self.header_extension_profile = reader.read_u16::<BigEndian>()?;
+    //         self.header_extension_length = reader.read_u16::<BigEndian>()?;
+    //         self.header_extension_payload =
+    //             reader.read_bytes(4 * self.header_extension_length as usize)?;
+    //     }
+
+    //     if self.header.padding_flag == 1 {
+    //         let padding_length = reader.get(reader.len() - 1)? as usize;
+    //         self.payload
+    //             .put(reader.read_bytes(reader.len() - padding_length)?);
+    //         self.padding.put(reader.extract_remaining_bytes());
+    //     }
+
+    //     Ok(())
+    // }
+    // pub fn pack(&mut self) -> Result<BytesMut, BytesWriteError> {
+    //     let mut writer = BytesWriter::new();
+
+    //     let header_bytesmut = self.header.marshal()?;
+    //     writer.write(&header_bytesmut[..])?;
+
+    //     writer.write_u16::<BigEndian>(self.header_extension_profile)?;
+    //     writer.write_u16::<BigEndian>(self.header_extension_length)?;
+    //     writer.write(&self.header_extension_payload[..])?;
+
+    //     writer.write(&self.payload[..])?;
+    //     writer.write(&self.padding[..])?;
+
+    //     Ok(writer.extract_current_bytes())
+    // }
 }

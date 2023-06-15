@@ -1,7 +1,7 @@
 use super::errors::RtcpError;
 use super::rtcp_header::RtcpHeader;
-use super::Marshal;
-use super::Unmarshal;
+use crate::rtp::utils::Marshal;
+use crate::rtp::utils::Unmarshal;
 use byteorder::BigEndian;
 use bytes::{BufMut, BytesMut};
 use bytesio::bytes_errors::BytesReadError;
@@ -28,7 +28,7 @@ pub struct RtcpBye {
     reason: BytesMut,
 }
 
-impl Unmarshal<BytesMut, RtcpError> for RtcpBye {
+impl Unmarshal<BytesMut, Result<Self, RtcpError>> for RtcpBye {
     fn unmarshal(data: BytesMut) -> Result<Self, RtcpError>
     where
         Self: Sized,
@@ -50,7 +50,7 @@ impl Unmarshal<BytesMut, RtcpError> for RtcpBye {
     }
 }
 
-impl Marshal<RtcpError> for RtcpBye {
+impl Marshal<Result<BytesMut, RtcpError>> for RtcpBye {
     fn marshal(&self) -> Result<BytesMut, RtcpError> {
         let mut writer = BytesWriter::default();
 
