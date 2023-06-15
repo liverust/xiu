@@ -1,10 +1,10 @@
 use super::define;
 use super::errors::PackerError;
-use super::errors::RtpH264PackerError;
-use super::errors::RtpPackerError;
+use super::errors::UnPackerError;
 use super::utils;
 use super::utils::TPacker;
 use super::utils::TRtpPacker;
+use super::utils::TUnPacker;
 use super::RtpHeader;
 use super::RtpPacket;
 use byteorder::BigEndian;
@@ -13,7 +13,7 @@ use bytesio::bytes_errors::BytesReadError;
 use bytesio::bytes_reader::BytesReader;
 use bytesio::bytes_writer::BytesWriter;
 
-pub type OnPacketFn = fn(BytesMut) -> Result<(), RtpH264PackerError>;
+pub type OnPacketFn = fn(BytesMut) -> Result<(), PackerError>;
 
 pub struct RtpH264Packer {
     header: RtpHeader,
@@ -22,7 +22,7 @@ pub struct RtpH264Packer {
 }
 
 impl RtpH264Packer {
-    pub fn pack_fu_a(&mut self, nalu: BytesMut) -> Result<(), RtpH264PackerError> {
+    pub fn pack_fu_a(&mut self, nalu: BytesMut) -> Result<(), PackerError> {
         let mut nalu_reader = BytesReader::new(nalu);
         let byte_1st = nalu_reader.read_u8()?;
 
@@ -59,7 +59,7 @@ impl RtpH264Packer {
 
         Ok(())
     }
-    pub fn pack_single(&mut self, nalu: BytesMut) -> Result<(), RtpH264PackerError> {
+    pub fn pack_single(&mut self, nalu: BytesMut) -> Result<(), PackerError> {
         let mut packet = RtpPacket::new(self.header.clone());
         packet.header.marker = 1;
         packet.payload.put(nalu);
@@ -84,7 +84,7 @@ impl TPacker for RtpH264Packer {
 }
 
 impl TRtpPacker for RtpH264Packer {
-    fn pack_nalu(&mut self, nalu: BytesMut) -> Result<(), RtpPackerError> {
+    fn pack_nalu(&mut self, nalu: BytesMut) -> Result<(), PackerError> {
         if nalu.len() + define::RTP_FIXED_HEADER_LEN <= self.mtu {
             self.pack_single(nalu)?;
         } else {
@@ -94,15 +94,17 @@ impl TRtpPacker for RtpH264Packer {
     }
 }
 
+pub type OnFrameFn = fn(BytesMut) -> Result<(), UnPackerError>;
 pub struct RtpH264UnPacker {
     sequence_number: u16,
     timestamp: u32,
     fu_buffer: BytesMut,
     flags: i16,
+    on_frame_handler: Option<OnFrameFn>,
 }
 
-impl RtpH264UnPacker {
-    pub fn unpack(&mut self, reader: &mut BytesReader) -> Result<Option<BytesMut>, BytesReadError> {
+impl TUnPacker for RtpH264UnPacker {
+    fn unpack(&mut self, reader: &mut BytesReader) -> Result<(), UnPackerError> {
         let mut rtp_packet = RtpPacket::default();
         rtp_packet.unpack(reader)?;
 
@@ -124,15 +126,20 @@ impl RtpH264UnPacker {
             }
         }
 
-        Ok(None)
+        Ok(())
     }
+}
 
+impl RtpH264UnPacker {
     fn unpack_single(
         &mut self,
         rtp_payload: BytesMut,
         t: define::RtpNalType,
-    ) -> Result<Option<BytesMut>, BytesReadError> {
-        return Ok(Some(rtp_payload));
+    ) -> Result<(), UnPackerError> {
+        if let Some(f) = self.on_frame_handler {
+            f(rtp_payload);
+        }
+        return Ok(());
     }
 
     //  0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
@@ -179,7 +186,7 @@ impl RtpH264UnPacker {
         &mut self,
         rtp_payload: BytesMut,
         t: define::RtpNalType,
-    ) -> Result<Option<BytesMut>, BytesReadError> {
+    ) -> Result<(), UnPackerError> {
         let mut payload_reader = BytesReader::new(rtp_payload);
         let fu_indicator = payload_reader.read_u8()?;
         let fu_header = payload_reader.read_u8()?;
@@ -197,14 +204,16 @@ impl RtpH264UnPacker {
         self.fu_buffer.put(payload_reader.extract_remaining_bytes());
 
         if utils::is_fu_end(fu_header) {
-            let mut packet = BytesMut::new();
-            packet.extend_from_slice(&define::ANNEXB_NALU_START_CODE);
-            packet.put(self.fu_buffer.clone());
+            let mut frame = BytesMut::new();
+            frame.extend_from_slice(&define::ANNEXB_NALU_START_CODE);
+            frame.put(self.fu_buffer.clone());
             self.fu_buffer.clear();
-            return Ok(Some(packet));
+            if let Some(f) = self.on_frame_handler {
+                f(frame)?;
+            }
         }
 
-        Ok(None)
+        Ok(())
     }
 
     //  0                   1                   2                   3
@@ -254,7 +263,7 @@ impl RtpH264UnPacker {
         &mut self,
         rtp_payload: BytesMut,
         t: define::RtpNalType,
-    ) -> Result<Option<BytesMut>, BytesReadError> {
+    ) -> Result<(), UnPackerError> {
         let mut payload_reader = BytesReader::new(rtp_payload);
         //STAP-A / STAP-B HDR
         payload_reader.read_u8()?;
@@ -263,14 +272,19 @@ impl RtpH264UnPacker {
             //read DON
             payload_reader.read_u16::<BigEndian>()?;
         }
-        let mut nalus = BytesMut::new();
+
         while payload_reader.len() > 0 {
             let length = payload_reader.read_u16::<BigEndian>()? as usize;
             let nalu = payload_reader.read_bytes(length)?;
-            nalus.extend_from_slice(&define::ANNEXB_NALU_START_CODE);
-            nalus.put(nalu);
+
+            let mut frame = BytesMut::new();
+            frame.extend_from_slice(&define::ANNEXB_NALU_START_CODE);
+            frame.put(nalu);
+            if let Some(f) = self.on_frame_handler {
+                f(frame)?;
+            }
         }
-        Ok(Some(nalus))
+        Ok(())
     }
 
     //  0                   1                   2                   3
@@ -330,14 +344,13 @@ impl RtpH264UnPacker {
         &mut self,
         rtp_payload: BytesMut,
         t: define::RtpNalType,
-    ) -> Result<Option<BytesMut>, BytesReadError> {
+    ) -> Result<(), UnPackerError> {
         let mut payload_reader = BytesReader::new(rtp_payload);
         //read NAL HDR
         payload_reader.read_u8()?;
         //read decoding_order_number_base
         payload_reader.read_u16::<BigEndian>()?;
 
-        let mut nalus = BytesMut::new();
         while payload_reader.len() > 0 {
             //read nalu size
             let nalu_size = payload_reader.read_u16::<BigEndian>()? as usize;
@@ -354,10 +367,15 @@ impl RtpH264UnPacker {
             };
             assert!(ts != 0);
             let nalu = payload_reader.read_bytes(nalu_size - ts_bytes - 1)?;
-            nalus.extend_from_slice(&define::ANNEXB_NALU_START_CODE);
-            nalus.put(nalu);
+
+            let mut frame = BytesMut::new();
+            frame.extend_from_slice(&define::ANNEXB_NALU_START_CODE);
+            frame.put(nalu);
+            if let Some(f) = self.on_frame_handler {
+                f(frame)?;
+            }
         }
 
-        Ok(Some(nalus))
+        Ok(())
     }
 }

@@ -1,10 +1,10 @@
 use super::define;
 use super::errors::PackerError;
-use super::errors::RtpH264PackerError;
-use super::errors::RtpPackerError;
+use super::errors::UnPackerError;
 use super::utils;
 use super::utils::TPacker;
 use super::utils::TRtpPacker;
+use super::utils::TUnPacker;
 use super::RtpHeader;
 use super::RtpPacket;
 use byteorder::BigEndian;
@@ -13,7 +13,7 @@ use bytesio::bytes_errors::BytesReadError;
 use bytesio::bytes_reader::BytesReader;
 use bytesio::bytes_writer::BytesWriter;
 
-pub type OnPacketFn = fn(BytesMut) -> Result<(), RtpH264PackerError>;
+pub type OnPacketFn = fn(BytesMut) -> Result<(), PackerError>;
 
 pub struct RtpAacPacker {
     header: RtpHeader,
@@ -40,7 +40,7 @@ impl TPacker for RtpAacPacker {
     }
 }
 
-pub type OnFrameFn = fn(BytesMut) -> Result<(), RtpH264PackerError>;
+pub type OnFrameFn = fn(BytesMut) -> Result<(), PackerError>;
 pub struct RtpAacUnPacker {
     sequence_number: u16,
     timestamp: u32,
@@ -62,8 +62,8 @@ pub struct RtpAacUnPacker {
 
 // Au-headers-length 2 bytes
 
-impl RtpAacUnPacker {
-    fn unpack(&mut self, reader: &mut BytesReader) -> Result<(), BytesReadError> {
+impl TUnPacker for RtpAacUnPacker {
+    fn unpack(&mut self, reader: &mut BytesReader) -> Result<(), UnPackerError> {
         let mut rtp_packet = RtpPacket::default();
         rtp_packet.unpack(reader)?;
         let au_headers_length = (reader.read_u16::<BigEndian>()? + 7) / 8;
@@ -72,7 +72,8 @@ impl RtpAacUnPacker {
 
         let mut au_lengths = Vec::new();
         for _ in 0..aus_number {
-            let au_length = ((reader.read_u8()? << 8) | (reader.read_u8()? & 0xF8)) as usize;
+            let au_length =
+                (((reader.read_u8()? as u16) << 8) | ((reader.read_u8()? as u16) & 0xF8)) as usize;
             au_lengths.push(au_length / 8);
         }
 

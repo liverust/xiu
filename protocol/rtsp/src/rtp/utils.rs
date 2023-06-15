@@ -1,13 +1,19 @@
 use super::define;
 use super::errors::PackerError;
-use super::errors::RtpPackerError;
+use super::errors::UnPackerError;
+use bytesio::bytes_reader::BytesReader;
+
 use bytes::{BufMut, BytesMut};
 
 pub trait TPacker {
     fn pack(&mut self, nalus: &mut BytesMut) -> Result<(), PackerError>;
 }
 pub trait TRtpPacker: TPacker {
-    fn pack_nalu(&mut self, nalu: BytesMut) -> Result<(), RtpPackerError>;
+    fn pack_nalu(&mut self, nalu: BytesMut) -> Result<(), PackerError>;
+}
+
+pub trait TUnPacker {
+    fn unpack(&mut self, reader: &mut BytesReader) -> Result<(), UnPackerError>;
 }
 
 pub(super) fn is_fu_start(fu_header: u8) -> bool {
@@ -26,7 +32,7 @@ pub fn find_start_code(nalus: &[u8]) -> Option<usize> {
 pub fn split_annexb_and_process<T: TRtpPacker>(
     nalus: &mut BytesMut,
     packer: &mut T,
-) -> Result<(), RtpPackerError> {
+) -> Result<(), PackerError> {
     while nalus.len() > 0 {
         /* 0x02,...,0x00,0x00,0x01,0x02..,0x00,0x00,0x01  */
         /*  |         |              |      |             */
