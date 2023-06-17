@@ -112,8 +112,8 @@ impl Unmarshal for H265Fmtp {
             log::warn!("H265FmtpSdp parse err: {}", raw_data);
             return None;
         }
-        let parameters: Vec<&str> = eles[1].split(';').collect();
 
+        let parameters: Vec<&str> = eles[1].split(';').collect();
         for parameter in parameters {
             let kv: Vec<&str> = parameter.trim().splitn(2, '=').collect();
             if kv.len() < 2 {

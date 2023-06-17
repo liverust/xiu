@@ -12,6 +12,7 @@ use bytesio::bytes_writer::AsyncBytesWriter;
 use errors::SessionError;
 
 use super::http::parser::RtspRequest;
+use super::sdp::Sdp;
 use define::rtsp_method_name;
 use httparse::Request;
 use httparse::Response;
@@ -26,6 +27,7 @@ pub struct RtspServerSession {
     writer: AsyncBytesWriter,
     bytesio_data: BytesMut,
     transport: RtspTransport,
+    sdp: Sdp,
     pub session_id: Uuid,
 }
 
@@ -61,7 +63,9 @@ impl RtspServerSession {
             if let Ok(data) = InterleavedBinaryData::new(&mut self.reader).await {
                 match data {
                     Some(a) => {}
-                    None => {}
+                    None => {
+                        // self.on_rtp_over_rtsp_message()?;
+                    }
                 }
             }
         }
@@ -98,7 +102,13 @@ impl RtspServerSession {
                     }
                 }
                 rtsp_method_name::DESCRIBE => {}
-                rtsp_method_name::ANNOUNCE => {}
+                rtsp_method_name::ANNOUNCE => {
+                    if let Some(request_body) = rtsp_request.body {
+                        if let Some(sdp) = Sdp::unmarshal(&request_body) {
+                            self.sdp = sdp;
+                        }
+                    }
+                }
                 rtsp_method_name::SETUP => {}
                 rtsp_method_name::PLAY => {}
                 rtsp_method_name::PAUSE => {}

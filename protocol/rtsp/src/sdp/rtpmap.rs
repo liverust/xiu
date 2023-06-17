@@ -9,28 +9,33 @@ pub struct RtpMap {
 }
 
 impl Unmarshal for RtpMap {
+    // a=rtpmap:96 H264/90000\r\n\
     fn unmarshal(raw_data: &str) -> Option<Self> {
         let mut rtpmap = RtpMap::default();
 
         let parts: Vec<&str> = raw_data.split(' ').collect();
 
-        if let Ok(payload_type) = parts[0].parse::<u16>() {
-            rtpmap.payload_type = payload_type;
-        }
-
-        let second_parts: Vec<&str> = parts[1].split('/').collect();
-        let second_part_size = second_parts.len();
-
-        if second_part_size > 0 {
-            rtpmap.encoding_name = second_parts[0].to_string();
-        }
-        if second_part_size > 1 {
-            if let Ok(clock_rate) = second_parts[1].parse::<u32>() {
-                rtpmap.clock_rate = clock_rate;
+        if let Some(part_0) = parts.get(0) {
+            if let Ok(payload_type) = part_0.parse::<u16>() {
+                rtpmap.payload_type = payload_type;
             }
         }
-        if second_part_size > 2 {
-            rtpmap.encoding_param = second_parts[2].to_string();
+
+        if let Some(part_0) = parts.get(1) {
+            let parameters: Vec<&str> = part_0.split('/').collect();
+
+            if let Some(para_0) = parameters.get(0) {
+                rtpmap.encoding_name = para_0.to_string();
+            }
+
+            if let Some(para_1) = parameters.get(1) {
+                if let Ok(clock_rate) = para_1.parse::<u32>() {
+                    rtpmap.clock_rate = clock_rate;
+                }
+            }
+            if let Some(para_2) = parameters.get(2) {
+                rtpmap.encoding_param = para_2.to_string();
+            }
         }
 
         Some(rtpmap)

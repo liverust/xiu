@@ -33,8 +33,9 @@ impl Unmarshal<BytesMut, Result<Self, RtcpError>> for RtcpApp {
     where
         Self: Sized,
     {
-        let mut rtcp_app = RtcpApp::default();
         let mut reader = BytesReader::new(data);
+
+        let mut rtcp_app = RtcpApp::default();
         rtcp_app.header = RtcpHeader::unmarshal(&mut reader)?;
 
         rtcp_app.ssrc = reader.read_u32::<BigEndian>()?;

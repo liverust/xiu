@@ -86,7 +86,7 @@ struct SdpMediaInfo {
 // }
 
 #[derive(Default, Debug)]
-struct Sdp {
+pub struct Sdp {
     raw_string: String,
     version: u16,
     origin: String,
@@ -103,28 +103,33 @@ impl Unmarshal for SdpMediaInfo {
     fn unmarshal(raw_data: &str) -> Option<Self> {
         let mut sdp_media = SdpMediaInfo::default();
         let parameters: Vec<&str> = raw_data.split(' ').collect();
-        let param_len = parameters.len();
 
-        if param_len > 0 {
-            sdp_media.media_type = parameters[0].to_string();
+        if let Some(para_0) = parameters.get(0) {
+            sdp_media.media_type = para_0.to_string();
         }
-        if param_len > 1 {
-            if let Ok(port) = parameters[1].parse::<usize>() {
+
+        if let Some(para_1) = parameters.get(1) {
+            if let Ok(port) = para_1.parse::<usize>() {
                 sdp_media.port = port;
             }
         }
-        if param_len > 2 {
-            sdp_media.protocol = parameters[2].to_string();
+
+        if let Some(para_2) = parameters.get(2) {
+            sdp_media.protocol = para_2.to_string();
         }
 
         let mut cur_param_idx = 3;
-        while cur_param_idx < param_len {
-            if let Ok(fmt) = parameters[cur_param_idx].parse::<u8>() {
-                sdp_media.fmts.push(fmt);
+        loop {
+            if let Some(fmt_str) = parameters.get(cur_param_idx) {
+                if let Ok(fmt) = fmt_str.parse::<u8>() {
+                    sdp_media.fmts.push(fmt);
+                }
+            } else {
+                break;
             }
-
             cur_param_idx += 1;
         }
+
         Some(sdp_media)
     }
 }
@@ -191,56 +196,49 @@ impl Unmarshal for Sdp {
                     }
                 }
                 "b" => {
-                    let sdp_medias_len = sdp.medias.len();
-                    if sdp_medias_len == 0 {
+                    if let Some(cur_media) = sdp.medias.last_mut() {
+                        cur_media.bandwidth = Bandwidth::unmarshal(kv[1]).unwrap();
+                    } else {
                         continue;
                     }
-                    if let Some(cur_media) = sdp.medias.get_mut(sdp_medias_len - 1) {
-                        cur_media.bandwidth = Bandwidth::unmarshal(kv[1]).unwrap();
-                    }
                 }
+                // a=rtpmap:96 H264/90000\r\n\
+                // a=fmtp:96 packetization-mode=1; sprop-parameter-sets=Z2QAHqzZQKAv+XARAAADAAEAAAMAMg8WLZY=,aOvjyyLA; profile-level-id=64001E\r\n\
+                // a=control:streamid=0\r\n\
                 "a" => {
                     let attribute: Vec<&str> = kv[1].splitn(2, ':').collect();
 
                     let attr_name = attribute[0];
-                    let attr_value = if attribute.len() > 1 {
-                        attribute[1]
+                    let attr_value = if let Some(val) = attribute.get(1) {
+                        val
                     } else {
                         ""
                     };
 
-                    let medias_len = sdp.medias.len();
-                    let attributes = if medias_len == 0 {
-                        //attributes do not under the 'm' line
-                        &mut sdp.attributes
-                    } else {
-                        if let Some(cur_media) = sdp.medias.get_mut(medias_len - 1) {
-                            let parameters: Vec<&str> = kv[1].splitn(2, ':').collect();
-                            if parameters.len() == 2 {
-                                match parameters[0] {
-                                    "rtpmap" => {
-                                        if let Some(rtpmap) = RtpMap::unmarshal(parameters[1]) {
-                                            cur_media.rtpmap = rtpmap;
-                                            continue;
-                                        }
-                                    }
-                                    "fmtp" => {
-                                        cur_media.fmtp = Fmtp::new(
-                                            &cur_media.rtpmap.encoding_name,
-                                            parameters[1],
-                                        );
+                    if let Some(cur_media) = sdp.medias.last_mut() {
+                        if attribute.len() == 2 {
+                            match attr_name {
+                                "rtpmap" => {
+                                    if let Some(rtpmap) = RtpMap::unmarshal(attr_value) {
+                                        cur_media.rtpmap = rtpmap;
                                         continue;
                                     }
-                                    _ => {}
                                 }
+                                "fmtp" => {
+                                    cur_media.fmtp =
+                                        Fmtp::new(&cur_media.rtpmap.encoding_name, attr_value);
+                                    continue;
+                                }
+                                _ => {}
                             }
-                            &mut cur_media.attributes
-                        } else {
-                            log::error!("should not be here!");
-                            continue;
                         }
-                    };
-                    attributes.insert(attr_name.to_string(), attr_value.to_string());
+                        cur_media
+                            .attributes
+                            .insert(attr_name.to_string(), attr_value.to_string());
+                    } else {
+                        sdp.attributes
+                            .insert(attr_name.to_string(), attr_value.to_string());
+                    }
                 }
 
                 _ => {
