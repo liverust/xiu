@@ -16,6 +16,12 @@ pub struct RtspRequest {
     pub body: Option<String>,
 }
 
+impl RtspRequest {
+    pub fn get_header(&self, header_name: &String) -> Option<&String> {
+        self.headers.get(header_name)
+    }
+}
+
 impl Unmarshal for RtspRequest {
     fn unmarshal(request_data: &str) -> Option<Self> {
         let mut rtsp_request = RtspRequest::default();

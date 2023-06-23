@@ -109,7 +109,12 @@ impl RtspServerSession {
                         }
                     }
                 }
-                rtsp_method_name::SETUP => {}
+                rtsp_method_name::SETUP => {
+                    if let Some(transport_data) = rtsp_request.get_header(&"Transport".to_string())
+                    {
+                        let transport = RtspTransport::unmarshal(transport_data);
+                    }
+                }
                 rtsp_method_name::PLAY => {}
                 rtsp_method_name::PAUSE => {}
                 rtsp_method_name::TEARDOWN => {}

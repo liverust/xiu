@@ -21,6 +21,7 @@ use bytesio::bytes_writer::BytesWriter;
 
 pub type OnPacketFn = fn(BytesMut) -> Result<(), PackerError>;
 
+#[derive(Debug, Clone, Default)]
 pub struct RtpH265Packer {
     header: RtpHeader,
     mtu: usize,
@@ -28,6 +29,19 @@ pub struct RtpH265Packer {
 }
 
 impl RtpH265Packer {
+    pub fn new(payload_type: u8, ssrc: u32, init_seq: u16, mtu: usize) -> Self {
+        RtpH265Packer {
+            header: RtpHeader {
+                payload_type,
+                seq_number: init_seq,
+                ssrc,
+                ..Default::default()
+            },
+            mtu,
+            ..Default::default()
+        }
+    }
+
     pub fn pack_fu(&mut self, nalu: BytesMut) -> Result<(), PackerError> {
         let mut nalu_reader = BytesReader::new(nalu);
         /* NALU header
@@ -123,6 +137,7 @@ impl TRtpPacker for RtpH265Packer {
 }
 
 pub type OnFrameFn = fn(BytesMut) -> Result<(), UnPackerError>;
+#[derive(Debug, Clone, Default)]
 pub struct RtpH265UnPacker {
     sequence_number: u16,
     timestamp: u32,
@@ -158,6 +173,10 @@ impl TUnPacker for RtpH265UnPacker {
 }
 
 impl RtpH265UnPacker {
+    pub fn new() -> Self {
+        RtpH265UnPacker::default()
+    }
+
     fn unpack_single(&mut self, rtp_payload: BytesMut) -> Result<(), UnPackerError> {
         if let Some(f) = self.on_frame_handler {
             f(rtp_payload)?;

@@ -1,3 +1,5 @@
+use std::fmt::Debug;
+
 use super::define;
 use super::errors::PackerError;
 use super::errors::UnPackerError;
@@ -17,10 +19,26 @@ use bytesio::bytes_writer::BytesWriter;
 
 pub type OnPacketFn = fn(BytesMut) -> Result<(), PackerError>;
 
+#[derive(Debug, Clone, Default)]
 pub struct RtpAacPacker {
     header: RtpHeader,
     mtu: usize,
     on_packet_handler: Option<OnPacketFn>,
+}
+
+impl RtpAacPacker {
+    pub fn new(payload_type: u8, ssrc: u32, init_seq: u16, mtu: usize) -> Self {
+        RtpAacPacker {
+            header: RtpHeader {
+                payload_type,
+                seq_number: init_seq,
+                ssrc,
+                ..Default::default()
+            },
+            mtu,
+            ..Default::default()
+        }
+    }
 }
 
 impl TPacker for RtpAacPacker {
@@ -35,14 +53,17 @@ impl TPacker for RtpAacPacker {
 
         let packet_data = packet.marshal()?;
         if let Some(f) = self.on_packet_handler {
-            f(packet_data);
+            f(packet_data)?;
         }
+
+        self.header.seq_number += 1;
 
         Ok(())
     }
 }
 
 pub type OnFrameFn = fn(BytesMut) -> Result<(), PackerError>;
+#[derive(Debug, Clone, Default)]
 pub struct RtpAacUnPacker {
     sequence_number: u16,
     timestamp: u32,
@@ -63,6 +84,12 @@ pub struct RtpAacUnPacker {
 // +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+- .. -+-+-+-+-+-+-+-+-+-+
 
 // Au-headers-length 2 bytes
+
+impl RtpAacUnPacker {
+    pub fn new() -> Self {
+        RtpAacUnPacker::default()
+    }
+}
 
 impl TUnPacker for RtpAacUnPacker {
     fn unpack(&mut self, reader: &mut BytesReader) -> Result<(), UnPackerError> {
