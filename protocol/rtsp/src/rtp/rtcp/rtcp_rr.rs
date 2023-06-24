@@ -10,14 +10,14 @@ use bytesio::bytes_reader::BytesReader;
 use bytesio::bytes_writer::BytesWriter;
 
 #[derive(Debug, Clone, Default)]
-struct ReportBlock {
-    ssrc: u32,
-    fraction_lost: u8,
-    cumutlative_num_of_packets_lost: u32,
-    extended_highest_seq_number: u32,
-    jitter: u32,
-    lsr: u32,
-    dlsr: u32,
+pub struct ReportBlock {
+    pub ssrc: u32,
+    pub fraction_lost: u8,
+    pub cumutlative_num_of_packets_lost: u32,
+    pub extended_highest_seq_number: u32,
+    pub jitter: u32,
+    pub lsr: u32,
+    pub dlsr: u32,
 }
 
 impl Unmarshal<&mut BytesReader, Result<Self, RtcpError>> for ReportBlock {
@@ -56,20 +56,20 @@ impl Marshal<Result<BytesMut, RtcpError>> for ReportBlock {
 }
 
 #[derive(Debug, Clone, Default)]
-pub struct ReceiverReport {
-    header: RtcpHeader,
-    ssrc: u32,
-    report_blocks: Vec<ReportBlock>,
+pub struct RtcpReceiverReport {
+    pub header: RtcpHeader,
+    pub ssrc: u32,
+    pub report_blocks: Vec<ReportBlock>,
 }
 
-impl Unmarshal<BytesMut, Result<Self, RtcpError>> for ReceiverReport {
+impl Unmarshal<BytesMut, Result<Self, RtcpError>> for RtcpReceiverReport {
     fn unmarshal(data: BytesMut) -> Result<Self, RtcpError>
     where
         Self: Sized,
     {
         let mut reader = BytesReader::new(data);
 
-        let mut receiver_report = ReceiverReport::default();
+        let mut receiver_report = RtcpReceiverReport::default();
         receiver_report.header = RtcpHeader::unmarshal(&mut reader)?;
         receiver_report.ssrc = reader.read_u32::<BigEndian>()?;
 
@@ -82,7 +82,7 @@ impl Unmarshal<BytesMut, Result<Self, RtcpError>> for ReceiverReport {
     }
 }
 
-impl Marshal<Result<BytesMut, RtcpError>> for ReceiverReport {
+impl Marshal<Result<BytesMut, RtcpError>> for RtcpReceiverReport {
     fn marshal(&self) -> Result<BytesMut, RtcpError> {
         let mut writer = BytesWriter::default();
 

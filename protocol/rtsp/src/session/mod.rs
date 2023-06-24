@@ -3,7 +3,11 @@ pub mod errors;
 use crate::global_trait::Marshal;
 use crate::http::parser::RtspResponse;
 
+use super::rtsp_codec;
 use crate::global_trait::Unmarshal;
+use crate::rtsp_codec::RtspCodecInfo;
+use crate::rtsp_track::RtspTrack;
+use crate::rtsp_track::TrackType;
 use crate::rtsp_transport::RtspTransport;
 use byteorder::BigEndian;
 use bytes::BytesMut;
@@ -18,6 +22,7 @@ use httparse::Request;
 use httparse::Response;
 use indexmap::indexmap;
 use indexmap::IndexMap;
+use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use uuid::Uuid;
@@ -27,6 +32,7 @@ pub struct RtspServerSession {
     writer: AsyncBytesWriter,
     bytesio_data: BytesMut,
     transport: RtspTransport,
+    tracks: HashMap<TrackType, RtspTrack>,
     sdp: Sdp,
     pub session_id: Uuid,
 }
@@ -106,6 +112,41 @@ impl RtspServerSession {
                     if let Some(request_body) = rtsp_request.body {
                         if let Some(sdp) = Sdp::unmarshal(&request_body) {
                             self.sdp = sdp;
+                        }
+                    }
+
+                    for media in &self.sdp.medias {
+                        let media_name = &media.media_type;
+                        match media_name.as_str() {
+                            "audio" => {
+                                let codec_id = rtsp_codec::RTSP_CODEC_NAME_2_ID
+                                    .get(&media_name.as_str())
+                                    .unwrap()
+                                    .clone();
+                                let codec_info = RtspCodecInfo {
+                                    codec_id,
+                                    payload_type: media.rtpmap.payload_type as u8,
+                                    sample_rate: media.rtpmap.clock_rate,
+                                    channel_count: media.rtpmap.encoding_param.parse().unwrap(),
+                                };
+                                let track = RtspTrack::new(TrackType::Audio, codec_info);
+                                self.tracks.insert(TrackType::Audio, track);
+                            }
+                            "video" => {
+                                let codec_id = rtsp_codec::RTSP_CODEC_NAME_2_ID
+                                    .get(&media_name.as_str())
+                                    .unwrap()
+                                    .clone();
+                                let codec_info = RtspCodecInfo {
+                                    codec_id,
+                                    payload_type: media.rtpmap.payload_type as u8,
+                                    sample_rate: media.rtpmap.clock_rate,
+                                    ..Default::default()
+                                };
+                                let track = RtspTrack::new(TrackType::Video, codec_info);
+                                self.tracks.insert(TrackType::Video, track);
+                            }
+                            _ => {}
                         }
                     }
                 }

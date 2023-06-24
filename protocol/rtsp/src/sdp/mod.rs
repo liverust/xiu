@@ -59,14 +59,14 @@ a=control:track1
 m=audio 11704 RTP/AVP 96 97 98 0 8 18 101 99 100 */
 
 #[derive(Default, Debug)]
-struct SdpMediaInfo {
-    media_type: String,
+pub struct SdpMediaInfo {
+    pub media_type: String,
     port: usize,
     protocol: String,
     fmts: Vec<u8>,
     bandwidth: Bandwidth,
-    rtpmap: RtpMap,
-    fmtp: Option<fmtp::Fmtp>,
+    pub rtpmap: RtpMap,
+    pub fmtp: Option<fmtp::Fmtp>,
     attributes: HashMap<String, String>,
 }
 
@@ -93,7 +93,7 @@ pub struct Sdp {
     session: String,
     connection: String,
     timing: String,
-    medias: Vec<SdpMediaInfo>,
+    pub medias: Vec<SdpMediaInfo>,
     attributes: HashMap<String, String>,
 }
 

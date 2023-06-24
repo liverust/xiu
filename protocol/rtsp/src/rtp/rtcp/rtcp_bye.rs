@@ -22,10 +22,10 @@ use bytesio::bytes_writer::BytesWriter;
 
 #[derive(Debug, Clone, Default)]
 pub struct RtcpBye {
-    header: RtcpHeader,
-    ssrss: Vec<u32>,
-    length: u8,
-    reason: BytesMut,
+    pub header: RtcpHeader,
+    pub ssrss: Vec<u32>,
+    pub length: u8,
+    pub reason: BytesMut,
 }
 
 impl Unmarshal<BytesMut, Result<Self, RtcpError>> for RtcpBye {

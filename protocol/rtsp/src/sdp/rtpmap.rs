@@ -2,14 +2,16 @@ use crate::global_trait::{Marshal, Unmarshal};
 
 #[derive(Debug, Clone, Default)]
 pub struct RtpMap {
-    payload_type: u16,
+    pub payload_type: u16,
     pub encoding_name: String,
-    clock_rate: u32,
-    encoding_param: String,
+    pub clock_rate: u32,
+    pub encoding_param: String,
 }
 
 impl Unmarshal for RtpMap {
     // a=rtpmap:96 H264/90000\r\n\
+    // a=rtpmap:97 MPEG4-GENERIC/48000/2\r\n\
+
     fn unmarshal(raw_data: &str) -> Option<Self> {
         let mut rtpmap = RtpMap::default();
 
@@ -21,8 +23,8 @@ impl Unmarshal for RtpMap {
             }
         }
 
-        if let Some(part_0) = parts.get(1) {
-            let parameters: Vec<&str> = part_0.split('/').collect();
+        if let Some(part_1) = parts.get(1) {
+            let parameters: Vec<&str> = part_1.split('/').collect();
 
             if let Some(para_0) = parameters.get(0) {
                 rtpmap.encoding_name = para_0.to_string();

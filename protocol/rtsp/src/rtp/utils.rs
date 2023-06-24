@@ -2,6 +2,7 @@ use super::define;
 use super::errors::PackerError;
 use super::errors::UnPackerError;
 use bytesio::bytes_reader::BytesReader;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use bytes::{BufMut, BytesMut};
 
@@ -67,6 +68,15 @@ pub fn split_annexb_and_process<T: TRtpPacker>(
         }
     }
     Ok(())
+}
+
+pub fn current_time() -> u64 {
+    let duration = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH);
+
+    match duration {
+        Ok(result) => result.as_millis() as u64,
+        _ => 0,
+    }
 }
 
 #[cfg(test)]
