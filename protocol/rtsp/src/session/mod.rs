@@ -8,12 +8,15 @@ use crate::global_trait::Unmarshal;
 use crate::rtsp_codec::RtspCodecInfo;
 use crate::rtsp_track::RtspTrack;
 use crate::rtsp_track::TrackType;
+use crate::rtsp_transport::ProtocolType;
 use crate::rtsp_transport::RtspTransport;
+use crate::rtsp_utils;
 use byteorder::BigEndian;
 use bytes::BytesMut;
 use bytesio::bytes_reader::AsyncBytesReader;
 use bytesio::bytes_writer::AsyncBytesWriter;
 use errors::SessionError;
+use http::StatusCode;
 
 use super::http::parser::RtspRequest;
 use super::sdp::Sdp;
@@ -25,7 +28,6 @@ use indexmap::IndexMap;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::Mutex;
-use uuid::Uuid;
 
 pub struct RtspServerSession {
     reader: AsyncBytesReader,
@@ -34,7 +36,7 @@ pub struct RtspServerSession {
     transport: RtspTransport,
     tracks: HashMap<TrackType, RtspTrack>,
     sdp: Sdp,
-    pub session_id: Uuid,
+    pub session_id: String,
 }
 
 pub struct InterleavedBinaryData {
@@ -77,6 +79,29 @@ impl RtspServerSession {
         }
     }
 
+    fn gen_response(status_code: StatusCode, rtsp_request: &RtspRequest) -> RtspResponse {
+        let reason_phrase = if let Some(reason) = status_code.canonical_reason() {
+            reason.to_string()
+        } else {
+            "".to_string()
+        };
+
+        let mut response = RtspResponse {
+            version: "RTSP/1.0".to_string(),
+            status_code: status_code.as_u16(),
+            reason_phrase,
+            ..Default::default()
+        };
+
+        if let Some(cseq) = rtsp_request.headers.get("CSeq") {
+            response
+                .headers
+                .insert("CSeq".to_string(), cseq.to_string());
+        }
+
+        response
+    }
+
     async fn on_rtsp_message(&mut self) -> Result<(), SessionError> {
         self.reader.read().await?;
 
@@ -85,27 +110,13 @@ impl RtspServerSession {
         if let Some(rtsp_request) = RtspRequest::unmarshal(std::str::from_utf8(&data)?) {
             match rtsp_request.method.as_str() {
                 rtsp_method_name::OPTIONS => {
+                    let status_code = http::StatusCode::OK;
+
+                    let mut response = Self::gen_response(status_code, &rtsp_request);
                     let public_str = rtsp_method_name::ARRAY.join(",");
+                    response.headers.insert("Public".to_string(), public_str);
 
-                    let stats_code = http::StatusCode::OK;
-                    let reason_phrase = if let Some(reason) = stats_code.canonical_reason() {
-                        reason.to_string()
-                    } else {
-                        "".to_string()
-                    };
-                    let mut response = RtspResponse {
-                        headers: indexmap! {"Public".to_string() => public_str},
-                        version: "RTSP/1.0".to_string(),
-                        status_code: stats_code.as_u16(),
-                        reason_phrase,
-                        ..Default::default()
-                    };
-
-                    if let Some(cseq) = rtsp_request.headers.get("CSeq") {
-                        response
-                            .headers
-                            .insert("CSeq".to_string(), cseq.to_string());
-                    }
+                    self.send_response(&response)?;
                 }
                 rtsp_method_name::DESCRIBE => {}
                 rtsp_method_name::ANNOUNCE => {
@@ -117,6 +128,14 @@ impl RtspServerSession {
 
                     for media in &self.sdp.medias {
                         let media_name = &media.media_type;
+
+                        let media_control =
+                            if let Some(media_control_val) = media.attributes.get("control") {
+                                media_control_val.clone()
+                            } else {
+                                String::from("")
+                            };
+
                         match media_name.as_str() {
                             "audio" => {
                                 let codec_id = rtsp_codec::RTSP_CODEC_NAME_2_ID
@@ -129,7 +148,9 @@ impl RtspServerSession {
                                     sample_rate: media.rtpmap.clock_rate,
                                     channel_count: media.rtpmap.encoding_param.parse().unwrap(),
                                 };
-                                let track = RtspTrack::new(TrackType::Audio, codec_info);
+
+                                let track =
+                                    RtspTrack::new(TrackType::Audio, codec_info, media_control);
                                 self.tracks.insert(TrackType::Audio, track);
                             }
                             "video" => {
@@ -143,7 +164,8 @@ impl RtspServerSession {
                                     sample_rate: media.rtpmap.clock_rate,
                                     ..Default::default()
                                 };
-                                let track = RtspTrack::new(TrackType::Video, codec_info);
+                                let track =
+                                    RtspTrack::new(TrackType::Video, codec_info, media_control);
                                 self.tracks.insert(TrackType::Video, track);
                             }
                             _ => {}
@@ -151,10 +173,36 @@ impl RtspServerSession {
                     }
                 }
                 rtsp_method_name::SETUP => {
-                    if let Some(transport_data) = rtsp_request.get_header(&"Transport".to_string())
-                    {
-                        let transport = RtspTransport::unmarshal(transport_data);
+                    let status_code = http::StatusCode::OK;
+                    let mut response = Self::gen_response(status_code, &rtsp_request);
+
+                    for (_, v) in &mut self.tracks {
+                        if !rtsp_request.url.contains(&v.media_control) {
+                            continue;
+                        }
+
+                        if let Some(transport_data) =
+                            rtsp_request.get_header(&"Transport".to_string())
+                        {
+                            self.session_id = rtsp_utils::gen_random_string(10);
+
+                            let transport = RtspTransport::unmarshal(transport_data);
+                            if let Some(trans) = transport {
+                                if trans.protocol_type == ProtocolType::TCP {}
+                                v.set_transport(trans);
+                            }
+
+                            response
+                                .headers
+                                .insert("Transport".to_string(), transport_data.clone());
+                            response
+                                .headers
+                                .insert("Session".to_string(), self.session_id.clone());
+                        }
+                        break;
                     }
+
+                    self.send_response(&response)?;
                 }
                 rtsp_method_name::PLAY => {}
                 rtsp_method_name::PAUSE => {}

@@ -18,13 +18,13 @@ pub enum ProtocolType {
 }
 #[derive(Debug, Clone, Default)]
 pub struct RtspTransport {
-    cast_type: CastType,
-    protocol_type: ProtocolType,
-    interleaved: [u8; 2],
-    transport_mod: String,
-    client_port: [usize; 2],
-    server_port: [usize; 2],
-    ssrc: u32,
+    pub cast_type: CastType,
+    pub protocol_type: ProtocolType,
+    pub interleaved: [u8; 2],
+    pub transport_mod: String,
+    pub client_port: [usize; 2],
+    pub server_port: [usize; 2],
+    pub ssrc: u32,
 }
 
 impl Unmarshal for RtspTransport {

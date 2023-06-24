@@ -30,6 +30,7 @@ pub struct RtspTrack {
     codec_info: RtspCodecInfo,
     transport: RtspTransport,
     pub uri: String,
+    pub media_control: String,
     rtp_packer: Option<Box<dyn TPacker>>,
     rtp_unpacker: Option<Box<dyn TUnPacker>>,
     ssrc: u32,
@@ -39,10 +40,11 @@ pub struct RtspTrack {
 }
 
 impl RtspTrack {
-    pub fn new(track_type: TrackType, codec_info: RtspCodecInfo) -> Self {
+    pub fn new(track_type: TrackType, codec_info: RtspCodecInfo, media_control: String) -> Self {
         let mut rtsp_track = RtspTrack {
             track_type,
             codec_info,
+            media_control,
             ..Default::default()
         };
         rtsp_track.create_packer_unpacker();

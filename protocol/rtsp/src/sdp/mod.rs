@@ -67,7 +67,7 @@ pub struct SdpMediaInfo {
     bandwidth: Bandwidth,
     pub rtpmap: RtpMap,
     pub fmtp: Option<fmtp::Fmtp>,
-    attributes: HashMap<String, String>,
+    pub attributes: HashMap<String, String>,
 }
 
 // impl std::fmt::Debug for dyn TMsgConverter {
