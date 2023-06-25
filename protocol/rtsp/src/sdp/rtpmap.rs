@@ -46,19 +46,27 @@ impl Unmarshal for RtpMap {
 
 impl Marshal for RtpMap {
     fn marshal(&self) -> String {
-        String::default()
+        let mut rtpmap = format!(
+            "{} {}/{}",
+            self.payload_type, self.encoding_name, self.clock_rate
+        );
+        if self.encoding_param != String::from("") {
+            rtpmap = format!("{}/{}", rtpmap, self.encoding_param);
+        }
+
+        format!("{}\r\n", rtpmap)
     }
 }
 
 #[cfg(test)]
 mod tests {
 
-    use crate::global_trait::Unmarshal;
+    use crate::global_trait::{Marshal, Unmarshal};
 
     use super::RtpMap;
 
     #[test]
-    fn test_parse_rtpmap() {
+    fn test_marshal_unmarshal_rtpmap() {
         let mut parser = RtpMap::unmarshal("97 MPEG4-GENERIC/44100/2").unwrap();
 
         println!(" parser: {:?}", parser);
@@ -68,6 +76,8 @@ mod tests {
         assert_eq!(parser.clock_rate, 44100);
         assert_eq!(parser.encoding_param, "2".to_string());
 
+        print!("marshal str:{}", parser.marshal());
+
         let mut parser2 = RtpMap::unmarshal("96 H264/90000").unwrap();
 
         println!(" parser2: {:?}", parser2);
@@ -76,5 +86,7 @@ mod tests {
         assert_eq!(parser2.encoding_name, "H264".to_string());
         assert_eq!(parser2.clock_rate, 90000);
         assert_eq!(parser2.encoding_param, "".to_string());
+
+        print!("marshal str2 :{}", parser2.marshal());
     }
 }

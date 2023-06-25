@@ -15,6 +15,7 @@ use byteorder::BigEndian;
 use bytes::BytesMut;
 use bytesio::bytes_reader::AsyncBytesReader;
 use bytesio::bytes_writer::AsyncBytesWriter;
+use chrono::format::InternalFixed;
 use errors::SessionError;
 use http::StatusCode;
 
@@ -70,9 +71,11 @@ impl RtspServerSession {
         loop {
             if let Ok(data) = InterleavedBinaryData::new(&mut self.reader).await {
                 match data {
-                    Some(a) => {}
+                    Some(a) => {
+                        self.on_rtp_over_rtsp_message(a);
+                    }
                     None => {
-                        // self.on_rtp_over_rtsp_message()?;
+                        self.on_rtsp_message().await?;
                     }
                 }
             }
@@ -111,14 +114,22 @@ impl RtspServerSession {
             match rtsp_request.method.as_str() {
                 rtsp_method_name::OPTIONS => {
                     let status_code = http::StatusCode::OK;
-
                     let mut response = Self::gen_response(status_code, &rtsp_request);
                     let public_str = rtsp_method_name::ARRAY.join(",");
                     response.headers.insert("Public".to_string(), public_str);
 
                     self.send_response(&response)?;
                 }
-                rtsp_method_name::DESCRIBE => {}
+                rtsp_method_name::DESCRIBE => {
+                    let status_code = http::StatusCode::OK;
+                    let mut response = Self::gen_response(status_code, &rtsp_request);
+                    response.body = Some(self.sdp.marshal());
+                    response
+                        .headers
+                        .insert("Content-Type".to_string(), "application/sdp".to_string());
+
+                    self.send_response(&response)?;
+                }
                 rtsp_method_name::ANNOUNCE => {
                     if let Some(request_body) = rtsp_request.body {
                         if let Some(sdp) = Sdp::unmarshal(&request_body) {
@@ -218,7 +229,18 @@ impl RtspServerSession {
         Ok(())
     }
 
-    fn on_rtp_over_rtsp_message(&mut self) {}
+    fn on_rtp_over_rtsp_message(&mut self, interleaved_binary_data: InterleavedBinaryData) {
+        for (k, v) in &self.tracks {
+            let rtp_identifier = v.transport.interleaved[0];
+            let rtcp_identifier = v.transport.interleaved[1];
+            match interleaved_binary_data.channel_identifier {
+                rtp_identifier => {}
+                rtcp_identifier => {}
+                _ => {}
+            }
+            //if v.transport.interleaved[0] == interleaved_binary_data.channel_identifier {}
+        }
+    }
     fn send_response(&mut self, response: &RtspResponse) -> Result<(), SessionError> {
         self.writer.write(response.marshal().as_bytes())?;
 

@@ -5,6 +5,7 @@ use bytes::BytesMut;
 
 #[derive(Debug, Clone, Default)]
 pub struct H264Fmtp {
+    pub payload_type: u16,
     packetization_mode: u8,
     profile_level_id: BytesMut,
     sps: BytesMut,
@@ -12,12 +13,14 @@ pub struct H264Fmtp {
 }
 #[derive(Debug, Clone, Default)]
 pub struct H265Fmtp {
+    pub payload_type: u16,
     vps: BytesMut,
     sps: BytesMut,
     pps: BytesMut,
 }
 #[derive(Debug, Clone, Default)]
 pub struct Mpeg4Fmtp {
+    pub payload_type: u16,
     asc: BytesMut,
     profile_level_id: BytesMut,
     mode: String,
@@ -54,6 +57,14 @@ impl Fmtp {
         }
         None
     }
+
+    pub fn marshal(&self) -> String {
+        match self {
+            Fmtp::H264(h264fmtp) => h264fmtp.marshal(),
+            Fmtp::H265(h265fmtp) => h265fmtp.marshal(),
+            Fmtp::Mpeg4(mpeg4fmtp) => mpeg4fmtp.marshal(),
+        }
+    }
 }
 
 // a=fmtp:96 packetization-mode=1; sprop-parameter-sets=Z2QAFqyyAUBf8uAiAAADAAIAAAMAPB4sXJA=,aOvDyyLA; profile-level-id=640016
@@ -64,6 +75,10 @@ impl Unmarshal for H264Fmtp {
         if eles.len() < 2 {
             log::warn!("H264FmtpSdp parse err: {}", raw_data);
             return None;
+        }
+
+        if let Ok(payload_type) = eles[0].parse::<u16>() {
+            h264_fmtp.payload_type = payload_type;
         }
 
         let parameters: Vec<&str> = eles[1].split(';').collect();
@@ -98,8 +113,18 @@ impl Unmarshal for H264Fmtp {
 }
 
 impl Marshal for H264Fmtp {
+    // a=fmtp:96 packetization-mode=1; sprop-parameter-sets=Z2QAFqyyAUBf8uAiAAADAAIAAAMAPB4sXJA=,aOvDyyLA; profile-level-id=640016
     fn marshal(&self) -> String {
-        String::default()
+        let sps_str = String::from_utf8(self.sps.to_vec()).unwrap();
+        let pps_str = String::from_utf8(self.pps.to_vec()).unwrap();
+        let profile_level_id_str = String::from_utf8(self.profile_level_id.to_vec()).unwrap();
+
+        let h264_fmtp = format!(
+            "{} packetization-mode={}; sprop-parameter-sets={},{}; profile-level-id={}",
+            self.payload_type, self.packetization_mode, sps_str, pps_str, profile_level_id_str
+        );
+
+        format!("{}\r\n", h264_fmtp)
     }
 }
 
@@ -111,6 +136,10 @@ impl Unmarshal for H265Fmtp {
         if eles.len() < 2 {
             log::warn!("H265FmtpSdp parse err: {}", raw_data);
             return None;
+        }
+
+        if let Ok(payload_type) = eles[0].parse::<u16>() {
+            h265_fmtp.payload_type = payload_type;
         }
 
         let parameters: Vec<&str> = eles[1].split(';').collect();
@@ -142,8 +171,18 @@ impl Unmarshal for H265Fmtp {
 }
 
 impl Marshal for H265Fmtp {
+    //"a=fmtp:96 sprop-vps=QAEMAf//AWAAAAMAkAAAAwAAAwA/ugJA; sprop-sps=QgEBAWAAAAMAkAAAAwAAAwA/oAUCAXHy5bpKTC8BAQAAAwABAAADAA8I; sprop-pps=RAHAc8GJ"
     fn marshal(&self) -> String {
-        String::default()
+        let sps_str = String::from_utf8(self.sps.to_vec()).unwrap();
+        let pps_str = String::from_utf8(self.pps.to_vec()).unwrap();
+        let vps_str = String::from_utf8(self.vps.to_vec()).unwrap();
+
+        let h265_fmtp = format!(
+            "{} sprop-vps={}; sprop-sps={}; sprop-pps={}",
+            self.payload_type, vps_str, sps_str, pps_str
+        );
+
+        format!("{}\r\n", h265_fmtp)
     }
 }
 
@@ -156,8 +195,12 @@ impl Unmarshal for Mpeg4Fmtp {
             log::warn!("Mpeg4FmtpSdp parse err: {}", raw_data);
             return None;
         }
-        let parameters: Vec<&str> = eles[1].split(';').collect();
 
+        if let Ok(payload_type) = eles[0].parse::<u16>() {
+            mpeg4_fmtp.payload_type = payload_type;
+        }
+
+        let parameters: Vec<&str> = eles[1].split(';').collect();
         for parameter in parameters {
             let kv: Vec<&str> = parameter.trim().splitn(2, '=').collect();
             if kv.len() < 2 {
@@ -200,8 +243,17 @@ impl Unmarshal for Mpeg4Fmtp {
 }
 
 impl Marshal for Mpeg4Fmtp {
+    //a=fmtp:97 profile-level-id=1;mode=AAC-hbr;sizelength=13;indexlength=3;indexdeltalength=3; config=121056e500
     fn marshal(&self) -> String {
-        String::default()
+        let profile_level_id_str = String::from_utf8(self.profile_level_id.to_vec()).unwrap();
+        let asc_str = String::from_utf8(self.asc.to_vec()).unwrap();
+
+        let mpeg4_fmtp = format!(
+            "{} profile-level-id={};mode={};sizelength={};indexlength={};indexdeltalength={}; config={}",
+            self.payload_type, profile_level_id_str, self.mode, self.size_length, self.index_length,
+            self.index_delta_length,asc_str);
+
+        format!("{}\r\n", mpeg4_fmtp)
     }
 }
 
@@ -211,11 +263,12 @@ mod tests {
     use super::H264Fmtp;
     use super::H265Fmtp;
     use super::Mpeg4Fmtp;
+    use crate::global_trait::Marshal;
     use crate::global_trait::Unmarshal;
 
     #[test]
     fn test_parse_h264fmtpsdp() {
-        let parser =  H264Fmtp::unmarshal("a=fmtp:96 packetization-mode=1; sprop-parameter-sets=Z2QAFqyyAUBf8uAiAAADAAIAAAMAPB4sXJA=,aOvDyyLA; profile-level-id=640016").unwrap();
+        let parser =  H264Fmtp::unmarshal("96 packetization-mode=1; sprop-parameter-sets=Z2QAFqyyAUBf8uAiAAADAAIAAAMAPB4sXJA=,aOvDyyLA; profile-level-id=640016").unwrap();
 
         println!(" parser: {:?}", parser);
 
@@ -224,7 +277,9 @@ mod tests {
         assert_eq!(parser.sps, "Z2QAFqyyAUBf8uAiAAADAAIAAAMAPB4sXJA=");
         assert_eq!(parser.pps, "aOvDyyLA");
 
-        let parser2 = H264Fmtp::unmarshal("a=fmtp:96 packetization-mode=1;\nsprop-parameter-sets=Z2QAFqyyAUBf8uAiAAADAAIAAAMAPB4sXJA=,aOvDyyLA;\nprofile-level-id=640016").unwrap();
+        print!("264 parser: {}", parser.marshal());
+
+        let parser2 = H264Fmtp::unmarshal("96 packetization-mode=1;\nsprop-parameter-sets=Z2QAFqyyAUBf8uAiAAADAAIAAAMAPB4sXJA=,aOvDyyLA;\nprofile-level-id=640016").unwrap();
 
         println!(" parser: {:?}", parser2);
 
@@ -232,10 +287,12 @@ mod tests {
         assert_eq!(parser2.profile_level_id, "640016");
         assert_eq!(parser2.sps, "Z2QAFqyyAUBf8uAiAAADAAIAAAMAPB4sXJA=");
         assert_eq!(parser2.pps, "aOvDyyLA");
+
+        print!("264 parser2: {}", parser2.marshal());
     }
     #[test]
     fn test_parse_h265fmtpsdp() {
-        let parser = H265Fmtp::unmarshal("a=fmtp:96 sprop-vps=QAEMAf//AWAAAAMAkAAAAwAAAwA/ugJA; sprop-sps=QgEBAWAAAAMAkAAAAwAAAwA/oAUCAXHy5bpKTC8BAQAAAwABAAADAA8I; sprop-pps=RAHAc8GJ").unwrap();
+        let parser = H265Fmtp::unmarshal("96 sprop-vps=QAEMAf//AWAAAAMAkAAAAwAAAwA/ugJA; sprop-sps=QgEBAWAAAAMAkAAAAwAAAwA/oAUCAXHy5bpKTC8BAQAAAwABAAADAA8I; sprop-pps=RAHAc8GJ").unwrap();
 
         println!(" parser: {:?}", parser);
 
@@ -245,11 +302,13 @@ mod tests {
             "QgEBAWAAAAMAkAAAAwAAAwA/oAUCAXHy5bpKTC8BAQAAAwABAAADAA8I"
         );
         assert_eq!(parser.pps, "RAHAc8GJ");
+
+        print!("265 parser: {}", parser.marshal());
     }
 
     #[test]
     fn test_parse_mpeg4fmtpsdp() {
-        let parser = Mpeg4Fmtp::unmarshal("a=fmtp:97 profile-level-id=1;mode=AAC-hbr;sizelength=13;indexlength=3;indexdeltalength=23; config=121056e500").unwrap();
+        let parser = Mpeg4Fmtp::unmarshal("97 profile-level-id=1;mode=AAC-hbr;sizelength=13;indexlength=3;indexdeltalength=23; config=121056e500").unwrap();
 
         println!(" parser: {:?}", parser);
 
@@ -259,5 +318,7 @@ mod tests {
         assert_eq!(parser.size_length, 13);
         assert_eq!(parser.index_length, 3);
         assert_eq!(parser.index_delta_length, 23);
+
+        print!("mpeg4 parser: {}", parser.marshal());
     }
 }

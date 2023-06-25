@@ -28,7 +28,7 @@ pub enum TrackType {
 pub struct RtspTrack {
     track_type: TrackType,
     codec_info: RtspCodecInfo,
-    transport: RtspTransport,
+    pub transport: RtspTransport,
     pub uri: String,
     pub media_control: String,
     rtp_packer: Option<Box<dyn TPacker>>,

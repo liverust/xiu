@@ -134,9 +134,45 @@ impl Unmarshal for SdpMediaInfo {
     }
 }
 
+// m=video 0 RTP/AVP 96\r\n\
+// b=AS:284\r\n\
+// a=rtpmap:96 H264/90000\r\n\
+// a=fmtp:96 packetization-mode=1; sprop-parameter-sets=Z2QAHqzZQKAv+XARAAADAAEAAAMAMg8WLZY=,aOvjyyLA; profile-level-id=64001E\r\n\
+// a=control:streamid=0\r\n\
+// m=audio 0 RTP/AVP 97\r\n\
+// b=AS:128\r\n\
+// a=rtpmap:97 MPEG4-GENERIC/48000/2\r\n\
+// a=fmtp:97 profile-level-id=1;mode=AAC-hbr;sizelength=13;indexlength=3;indexdeltalength=3; config=119056E500\r\n\
+// a=control:streamid=1\r\n"
+
 impl Marshal for SdpMediaInfo {
     fn marshal(&self) -> String {
-        String::default()
+        let fmts_str = self
+            .fmts
+            .iter()
+            .map(|b| b.to_string())
+            .collect::<Vec<String>>()
+            .join(" ");
+
+        let mut sdp_media_info = format!(
+            "m={} {} {} {}\r\nb={}a=rtpmap:{}",
+            self.media_type,
+            self.port,
+            self.protocol,
+            fmts_str,
+            self.bandwidth.marshal(),
+            self.rtpmap.marshal()
+        );
+
+        if let Some(fmtp) = &self.fmtp {
+            sdp_media_info = format!("{}a=fmtp:{}", sdp_media_info, fmtp.marshal());
+        }
+
+        for (k, v) in &self.attributes {
+            sdp_media_info = format!("{}a={}:{}\r\n", sdp_media_info, k, v);
+        }
+
+        sdp_media_info
     }
 }
 
@@ -251,16 +287,36 @@ impl Unmarshal for Sdp {
     }
 }
 
+// v=0\r\n\
+// o=- 0 0 IN IP4 127.0.0.1\r\n\
+// s=No Name\r\n\
+// c=IN IP4 127.0.0.1\r\n\
+// t=0 0\r\n\
+// a=tool:libavformat 58.76.100\r\n\
+
 impl Marshal for Sdp {
     fn marshal(&self) -> String {
-        String::default()
+        let mut sdp_str = format!(
+            "v={}\r\no={}\r\ns={}\r\nc={}\r\nt={}\r\n",
+            self.version, self.origin, self.session, self.connection, self.timing
+        );
+
+        for (k, v) in &self.attributes {
+            sdp_str = format!("{}a={}:{}\r\n", sdp_str, k, v);
+        }
+
+        for media_info in &self.medias {
+            sdp_str = format!("{}{}", sdp_str, media_info.marshal());
+        }
+
+        sdp_str
     }
 }
 
 #[cfg(test)]
 mod tests {
 
-    use crate::global_trait::Unmarshal;
+    use crate::global_trait::{Marshal, Unmarshal};
 
     use super::Sdp;
     use indexmap::IndexMap;
@@ -311,6 +367,21 @@ mod tests {
 
         if let Some(sdp) = Sdp::unmarshal(data2) {
             println!("sdp : {:?}", sdp);
+
+            println!("sdp str : {}", sdp.marshal());
         }
+    }
+    #[test]
+    fn test_str() {
+        let mut fmts: Vec<u8> = Vec::new();
+        fmts.push(5);
+        // fmts.push(6);
+        let fmts_str = fmts
+            .iter()
+            .map(|b| b.to_string())
+            .collect::<Vec<String>>()
+            .join(" ");
+
+        println!("=={}==", fmts_str);
     }
 }
