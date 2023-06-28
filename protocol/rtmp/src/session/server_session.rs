@@ -7,6 +7,7 @@ use {
     },
     crate::{
         amf0::Amf0ValueType,
+        cache::Cache,
         channels::define::ChannelEventProducer,
         chunk::{
             define::CHUNK_SIZE,
@@ -47,7 +48,6 @@ pub struct ServerSession {
     handshaker: HandshakeServer,
     unpacketizer: ChunkUnpacketizer,
     state: ServerSessionState,
-    pub common: Common,
     bytesio_data: BytesMut,
     has_remaing_data: bool,
     /* Used to mark the subscriber's the data producer
@@ -55,6 +55,8 @@ pub struct ServerSession {
     is called. */
     pub session_id: Uuid,
     connect_properties: ConnectProperties,
+    cache: Option<Cache>,
+    pub common: Common,
 }
 
 impl ServerSession {
@@ -86,6 +88,7 @@ impl ServerSession {
             bytesio_data: BytesMut::new(),
             has_remaing_data: false,
             connect_properties: ConnectProperties::default(),
+            cache: None,
         }
     }
 

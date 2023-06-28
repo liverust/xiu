@@ -58,9 +58,11 @@ impl Gops {
             return;
         }
 
-        if is_key_frame && self.gops.len() >= self.size {
+        if is_key_frame {
             //todo It may be possible to optimize here
-            self.gops.pop_front();
+            if self.gops.len() == self.size {
+                self.gops.pop_front();
+            }
             self.gops.push_back(Gop::new());
         }
 
