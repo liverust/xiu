@@ -8,10 +8,10 @@ use {
     crate::{
         cache::Cache,
         channels::define::{
-            CacheDataSender, ChannelData, ChannelDataReceiver, ChannelDataSender, ChannelEvent,
-            ChannelEventProducer,
+            ChannelData, ChannelDataReceiver, ChannelDataSender, ChannelEvent,
+            ChannelEventProducer, SendCacheDataFn,
         },
-        channels::errors::ChannelError,
+        channels::errors::{ChannelError, ChannelErrorValue},
         chunk::{
             define::{chunk_type, csid_type},
             packetizer::ChunkPacketizer,
@@ -100,45 +100,45 @@ pub struct Common {
     pub cache: Option<Arc<Mutex<Cache>>>,
 }
 
-impl CacheDataSender for Common {
-    fn send(&mut self, sender: ChannelDataSender) -> Result<(), ChannelError> {
-        // if let Some(meta_body_data) = self.cache.get_metadata() {
-        //     sender.send(meta_body_data).map_err(|_| ChannelError {
-        //         value: ChannelErrorValue::SendError,
-        //     })?;
-        // }
-        // log::error!("Transmiter Subscribe info 1");
-        // if let Some(audio_seq_data) = self.cache.get_audio_seq() {
-        //     sender.send(audio_seq_data).map_err(|_| ChannelError {
-        //         value: ChannelErrorValue::SendError,
-        //     })?;
-        // }
-        //                 log::error!("Transmiter Subscribe info 2");
-        // if let Some(video_seq_data) = self.cache.get_video_seq() {
-        //     sender.send(video_seq_data).map_err(|_| ChannelError {
-        //         value: ChannelErrorValue::SendError,
-        //     })?;
-        // }
+// impl CacheDataSender for Common {
+//     fn send(&mut self, sender: ChannelDataSender) -> Result<(), ChannelError> {
+//         // if let Some(meta_body_data) = self.cache.get_metadata() {
+//         //     sender.send(meta_body_data).map_err(|_| ChannelError {
+//         //         value: ChannelErrorValue::SendError,
+//         //     })?;
+//         // }
+//         // log::error!("Transmiter Subscribe info 1");
+//         // if let Some(audio_seq_data) = self.cache.get_audio_seq() {
+//         //     sender.send(audio_seq_data).map_err(|_| ChannelError {
+//         //         value: ChannelErrorValue::SendError,
+//         //     })?;
+//         // }
+//         //                 log::error!("Transmiter Subscribe info 2");
+//         // if let Some(video_seq_data) = self.cache.get_video_seq() {
+//         //     sender.send(video_seq_data).map_err(|_| ChannelError {
+//         //         value: ChannelErrorValue::SendError,
+//         //     })?;
+//         // }
 
-        // match info.sub_type {
-        //     SubscribeType::PlayerRtmp
-        //     | SubscribeType::PlayerHttpFlv
-        //     | SubscribeType::PlayerHls
-        //     | SubscribeType::GenerateHls => {
-        //         if let Some(gops_data) = self.cache.get_gops_data() {
-        //             for gop in gops_data {
-        //                 for channel_data in gop.get_frame_data() {
-        //                     sender.send(channel_data).map_err(|_| ChannelError {
-        //                         value: ChannelErrorValue::SendError,
-        //                     })?;
-        //                 }
-        //             }
-        //         }
-        //     }
+//         // match info.sub_type {
+//         //     SubscribeType::PlayerRtmp
+//         //     | SubscribeType::PlayerHttpFlv
+//         //     | SubscribeType::PlayerHls
+//         //     | SubscribeType::GenerateHls => {
+//         //         if let Some(gops_data) = self.cache.get_gops_data() {
+//         //             for gop in gops_data {
+//         //                 for channel_data in gop.get_frame_data() {
+//         //                     sender.send(channel_data).map_err(|_| ChannelError {
+//         //                         value: ChannelErrorValue::SendError,
+//         //                     })?;
+//         //                 }
+//         //             }
+//         //         }
+//         //     }
 
-        Ok(())
-    }
-}
+//         Ok(())
+//     }
+// }
 
 impl Common {
     pub fn new(
@@ -465,11 +465,52 @@ impl Common {
     ) -> Result<(), SessionError> {
         // let (sender, receiver) = oneshot::channel();
 
-        self.cache = Some(Arc::new(Mutex::new(Cache::new(
+        let cache = Arc::new(Mutex::new(Cache::new(
             app_name.clone(),
             stream_name.clone(),
             gop_num,
-        ))));
+        )));
+
+        self.cache = Some(cache.clone());
+        let cache_sender: SendCacheDataFn =
+            Box::new(move |sender: ChannelDataSender, sub_type: SubscribeType| {
+                let cache_clone_in = cache.clone();
+                Box::pin(async move {
+                    if let Some(meta_body_data) = cache_clone_in.lock().await.get_metadata() {
+                        sender.send(meta_body_data).map_err(|_| ChannelError {
+                            value: ChannelErrorValue::SendError,
+                        })?;
+                    }
+                    if let Some(audio_seq_data) = cache_clone_in.lock().await.get_audio_seq() {
+                        sender.send(audio_seq_data).map_err(|_| ChannelError {
+                            value: ChannelErrorValue::SendError,
+                        })?;
+                    }
+                    if let Some(video_seq_data) = cache_clone_in.lock().await.get_video_seq() {
+                        sender.send(video_seq_data).map_err(|_| ChannelError {
+                            value: ChannelErrorValue::SendError,
+                        })?;
+                    }
+                    match sub_type {
+                        SubscribeType::PlayerRtmp
+                        | SubscribeType::PlayerHttpFlv
+                        | SubscribeType::PlayerHls
+                        | SubscribeType::GenerateHls => {
+                            if let Some(gops_data) = cache_clone_in.lock().await.get_gops_data() {
+                                for gop in gops_data {
+                                    for channel_data in gop.get_frame_data() {
+                                        sender.send(channel_data).map_err(|_| ChannelError {
+                                            value: ChannelErrorValue::SendError,
+                                        })?;
+                                    }
+                                }
+                            }
+                        }
+                        SubscribeType::PublisherRtmp => {}
+                    }
+                    Ok(())
+                })
+            });
 
         let (sender, receiver) = mpsc::unbounded_channel();
         let publish_event = ChannelEvent::Publish {
@@ -477,7 +518,7 @@ impl Common {
             stream_name,
             receiver,
             info: self.get_publisher_info(pub_id),
-            cache_sender: Box::new(self) as Box<dyn CacheDataSender>,
+            cache_sender: cache_sender,
         };
 
         let rv = self.event_producer.send(publish_event);

@@ -12,6 +12,8 @@ use {
 use std::future::Future;
 use std::pin::Pin;
 
+use crate::session::define::SubscribeType;
+
 #[derive(Clone)]
 pub enum ChannelData {
     Video { timestamp: u32, data: BytesMut },
@@ -39,20 +41,20 @@ pub type StreamStatisticSizeReceiver = oneshot::Sender<usize>;
 
 type ChannelResponder<T> = oneshot::Sender<T>;
 
-pub trait CacheDataSender: fmt::Debug + Send {
-    fn send(&mut self, sender: ChannelDataSender) -> Result<(), ChannelError>;
-}
+// pub trait CacheDataSender: fmt::Debug + Send {
+//     fn send(&mut self, sender: ChannelDataSender) -> Result<(), ChannelError>;
+// }
 
 pub type SendCacheDataFn = Box<
     dyn (FnMut(
             ChannelDataSender,
+            SubscribeType,
         ) -> Pin<Box<dyn Future<Output = Result<(), ChannelError>> + Send + 'static>>)
         + Send
-        + Sync
-        + fmt::Debug,
+        + Sync,
 >;
 
-#[derive(Debug, Serialize)]
+#[derive(Serialize)]
 pub enum ChannelEvent {
     Subscribe {
         app_name: String,

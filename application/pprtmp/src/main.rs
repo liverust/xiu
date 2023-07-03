@@ -67,6 +67,7 @@ async fn main() -> Result<()> {
         pull_parser.app_name.clone(),
         pull_parser.raw_stream_name,
         producer.clone(),
+        0,
     );
     tokio::spawn(async move {
         if let Err(err) = pull_client_session.run().await {
@@ -90,6 +91,7 @@ async fn main() -> Result<()> {
         push_parser.app_name,
         push_parser.raw_stream_name,
         producer.clone(),
+        0,
     );
 
     push_client_session.subscribe(pull_parser.app_name, pull_parser.stream_name);
