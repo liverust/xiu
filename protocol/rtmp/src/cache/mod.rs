@@ -49,7 +49,7 @@ impl Cache {
     }
 
     //, values: Vec<Amf0ValueType>
-    pub fn save_metadata(&mut self, chunk_body: BytesMut, timestamp: u32) {
+    pub fn save_metadata(&mut self, chunk_body: &BytesMut, timestamp: u32) {
         self.metadata.save(chunk_body);
         self.metadata_timestamp = timestamp;
     }
@@ -68,7 +68,7 @@ impl Cache {
     //save audio gops and sequence header information
     pub async fn save_audio_data(
         &mut self,
-        chunk_body: BytesMut,
+        chunk_body: &BytesMut,
         timestamp: u32,
     ) -> Result<(), CacheError> {
         let channel_data = ChannelData::Audio {
@@ -124,7 +124,7 @@ impl Cache {
     //save video gops and sequence header information
     pub async fn save_video_data(
         &mut self,
-        chunk_body: BytesMut,
+        chunk_body: &BytesMut,
         timestamp: u32,
     ) -> Result<(), CacheError> {
         let mut parser = demuxer_tag::VideoTagHeaderDemuxer::new(chunk_body.clone());

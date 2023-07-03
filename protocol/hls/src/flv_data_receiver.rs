@@ -4,7 +4,7 @@ use {
         flv2hls::Flv2HlsRemuxer,
     },
     rtmp::channels::define::{
-        ChannelData, ChannelDataConsumer, ChannelEvent, ChannelEventProducer,
+        ChannelData, ChannelDataReceiver, ChannelEvent, ChannelEventProducer,
     },
     rtmp::session::{
         common::{NotifyInfo, SubscriberInfo},
@@ -27,7 +27,7 @@ pub struct FlvDataReceiver {
     stream_name: String,
 
     event_producer: ChannelEventProducer,
-    data_consumer: ChannelDataConsumer,
+    data_consumer: ChannelDataReceiver,
     media_processor: Flv2HlsRemuxer,
     subscriber_id: Uuid,
 }
@@ -103,7 +103,7 @@ impl FlvDataReceiver {
         let mut retry_count: u8 = 0;
 
         loop {
-            let (sender, receiver) = oneshot::channel();
+            let (sender, receiver) = mpsc::unbounded_channel();
             /*the sub info is only used to transfer from RTMP to HLS, but not for client player */
             let sub_info = SubscriberInfo {
                 id: self.subscriber_id,
@@ -118,7 +118,7 @@ impl FlvDataReceiver {
                 app_name: app_name.clone(),
                 stream_name: stream_name.clone(),
                 info: sub_info,
-                responder: sender,
+                sender,
             };
 
             let rv = self.event_producer.send(subscribe_event);
@@ -131,22 +131,24 @@ impl FlvDataReceiver {
                 });
             }
 
-            match receiver.await {
-                Ok(consumer) => {
-                    self.data_consumer = consumer;
-                    break;
-                }
-                Err(_) => {
-                    if retry_count > 10 {
-                        let session_error = SessionError {
-                            value: SessionErrorValue::SubscribeCountLimitReach,
-                        };
-                        return Err(HlsError {
-                            value: HlsErrorValue::SessionError(session_error),
-                        });
-                    }
-                }
-            }
+            self.data_consumer = receiver;
+            break;
+            // match receiver.await {
+            //     Ok(consumer) => {
+            //         self.data_consumer = consumer;
+            //         break;
+            //     }
+            //     Err(_) => {
+            //         if retry_count > 10 {
+            //             let session_error = SessionError {
+            //                 value: SessionErrorValue::SubscribeCountLimitReach,
+            //             };
+            //             return Err(HlsError {
+            //                 value: HlsErrorValue::SessionError(session_error),
+            //             });
+            //         }
+            //     }
+            // }
 
             sleep(Duration::from_millis(800)).await;
             retry_count += 1;

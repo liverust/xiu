@@ -7,7 +7,6 @@ use {
     },
     crate::{
         amf0::Amf0ValueType,
-        cache::Cache,
         channels::define::ChannelEventProducer,
         chunk::{
             define::CHUNK_SIZE,
@@ -55,12 +54,12 @@ pub struct ServerSession {
     is called. */
     pub session_id: Uuid,
     connect_properties: ConnectProperties,
-    cache: Option<Cache>,
     pub common: Common,
+    gop_num: usize,
 }
 
 impl ServerSession {
-    pub fn new(stream: TcpStream, event_producer: ChannelEventProducer) -> Self {
+    pub fn new(stream: TcpStream, event_producer: ChannelEventProducer, gop_num: usize) -> Self {
         let remote_addr = if let Ok(addr) = stream.peer_addr() {
             log::info!("server session: {}", addr.to_string());
             Some(addr)
@@ -88,7 +87,7 @@ impl ServerSession {
             bytesio_data: BytesMut::new(),
             has_remaing_data: false,
             connect_properties: ConnectProperties::default(),
-            cache: None,
+            gop_num,
         }
     }
 
@@ -244,13 +243,13 @@ impl ServerSession {
                 self.on_set_chunk_size(*chunk_size as usize)?;
             }
             RtmpMessageData::AudioData { data } => {
-                self.common.on_audio_data(data, timestamp)?;
+                self.common.on_audio_data(data, timestamp).await?;
             }
             RtmpMessageData::VideoData { data } => {
-                self.common.on_video_data(data, timestamp)?;
+                self.common.on_video_data(data, timestamp).await?;
             }
             RtmpMessageData::AmfData { raw_data } => {
-                self.common.on_meta_data(raw_data, timestamp)?;
+                self.common.on_meta_data(raw_data, timestamp).await?;
             }
 
             _ => {}
@@ -711,6 +710,7 @@ impl ServerSession {
                 self.app_name.clone(),
                 self.stream_name.clone(),
                 self.session_id,
+                self.gop_num,
             )
             .await?;
 

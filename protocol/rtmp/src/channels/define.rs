@@ -1,4 +1,5 @@
 use {
+    super::errors::ChannelError,
     crate::session::common::{PublisherInfo, SubscriberInfo},
     crate::statistics::StreamStatistics,
     bytes::BytesMut,
@@ -7,6 +8,10 @@ use {
     tokio::sync::{broadcast, mpsc, oneshot},
     uuid::Uuid,
 };
+
+use std::future::Future;
+use std::pin::Pin;
+
 #[derive(Clone)]
 pub enum ChannelData {
     Video { timestamp: u32, data: BytesMut },
@@ -14,8 +19,8 @@ pub enum ChannelData {
     MetaData { timestamp: u32, data: BytesMut },
 }
 
-pub type ChannelDataProducer = mpsc::UnboundedSender<ChannelData>;
-pub type ChannelDataConsumer = mpsc::UnboundedReceiver<ChannelData>;
+pub type ChannelDataSender = mpsc::UnboundedSender<ChannelData>;
+pub type ChannelDataReceiver = mpsc::UnboundedReceiver<ChannelData>;
 
 pub type ChannelEventProducer = mpsc::UnboundedSender<ChannelEvent>;
 pub type ChannelEventConsumer = mpsc::UnboundedReceiver<ChannelEvent>;
@@ -33,6 +38,20 @@ pub type StreamStatisticSizeSender = oneshot::Sender<usize>;
 pub type StreamStatisticSizeReceiver = oneshot::Sender<usize>;
 
 type ChannelResponder<T> = oneshot::Sender<T>;
+
+pub trait CacheDataSender: fmt::Debug + Send {
+    fn send(&mut self, sender: ChannelDataSender) -> Result<(), ChannelError>;
+}
+
+pub type SendCacheDataFn = Box<
+    dyn (FnMut(
+            ChannelDataSender,
+        ) -> Pin<Box<dyn Future<Output = Result<(), ChannelError>> + Send + 'static>>)
+        + Send
+        + Sync
+        + fmt::Debug,
+>;
+
 #[derive(Debug, Serialize)]
 pub enum ChannelEvent {
     Subscribe {
@@ -40,7 +59,7 @@ pub enum ChannelEvent {
         stream_name: String,
         info: SubscriberInfo,
         #[serde(skip_serializing)]
-        responder: ChannelResponder<ChannelDataConsumer>,
+        sender: ChannelDataSender,
     },
     UnSubscribe {
         app_name: String,
@@ -52,7 +71,9 @@ pub enum ChannelEvent {
         stream_name: String,
         info: PublisherInfo,
         #[serde(skip_serializing)]
-        responder: ChannelResponder<ChannelDataProducer>,
+        receiver: ChannelDataReceiver,
+        #[serde(skip_serializing)]
+        cache_sender: SendCacheDataFn,
     },
     UnPublish {
         app_name: String,
@@ -71,7 +92,7 @@ pub enum ChannelEvent {
 #[derive(Debug)]
 pub enum TransmitterEvent {
     Subscribe {
-        producer: ChannelDataProducer,
+        sender: ChannelDataSender,
         info: SubscriberInfo,
     },
     UnSubscribe {

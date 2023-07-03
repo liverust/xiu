@@ -5,7 +5,7 @@ use {
     },
     crate::rtmp::{
         cache::metadata::MetaData,
-        channels::define::{ChannelData, ChannelDataConsumer, ChannelEvent, ChannelEventProducer},
+        channels::define::{ChannelData, ChannelDataReceiver, ChannelEvent, ChannelEventProducer},
         session::{
             common::{NotifyInfo, SubscriberInfo},
             define::SubscribeType,
@@ -29,7 +29,7 @@ pub struct HttpFlv {
     muxer: FlvMuxer,
 
     event_producer: ChannelEventProducer,
-    data_consumer: ChannelDataConsumer,
+    data_consumer: ChannelDataReceiver,
     http_response_data_producer: HttpResponseDataProducer,
     subscriber_id: Uuid,
     request_url: String,
@@ -113,7 +113,7 @@ impl HttpFlv {
 
             ChannelData::MetaData { timestamp, data } => {
                 let mut metadata = MetaData::new();
-                metadata.save(data);
+                metadata.save(&data);
                 let data = metadata.remove_set_data_frame()?;
 
                 common_data = data;
@@ -168,7 +168,7 @@ impl HttpFlv {
         let mut retry_count: u8 = 0;
 
         loop {
-            let (sender, receiver) = oneshot::channel();
+            let (sender, receiver) = mpsc::unbounded_channel();
 
             let sub_info = SubscriberInfo {
                 id: self.subscriber_id,
@@ -183,7 +183,7 @@ impl HttpFlv {
                 app_name: self.app_name.clone(),
                 stream_name: self.stream_name.clone(),
                 info: sub_info,
-                responder: sender,
+                sender,
             };
 
             let rv = self.event_producer.send(subscribe_event);
@@ -197,22 +197,24 @@ impl HttpFlv {
                 });
             }
 
-            match receiver.await {
-                Ok(consumer) => {
-                    self.data_consumer = consumer;
-                    break;
-                }
-                Err(_) => {
-                    if retry_count > 10 {
-                        let session_error = SessionError {
-                            value: SessionErrorValue::SubscribeCountLimitReach,
-                        };
-                        return Err(HttpFLvError {
-                            value: HttpFLvErrorValue::SessionError(session_error),
-                        });
-                    }
-                }
-            }
+            self.data_consumer = receiver;
+            break;
+            // match receiver.await {
+            //     Ok(consumer) => {
+            //         self.data_consumer = consumer;
+            //         break;
+            //     }
+            //     Err(_) => {
+            //         if retry_count > 10 {
+            //             let session_error = SessionError {
+            //                 value: SessionErrorValue::SubscribeCountLimitReach,
+            //             };
+            //             return Err(HttpFLvError {
+            //                 value: HttpFLvErrorValue::SessionError(session_error),
+            //             });
+            //         }
+            //     }
+            // }
 
             sleep(Duration::from_millis(800)).await;
             retry_count += 1;

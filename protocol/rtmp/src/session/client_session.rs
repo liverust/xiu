@@ -79,6 +79,7 @@ pub struct ClientSession {
     client_type: ClientType,
     sub_app_name: Option<String>,
     sub_stream_name: Option<String>,
+    gop_num: usize,
 }
 
 impl ClientSession {
@@ -89,6 +90,7 @@ impl ClientSession {
         app_name: String,
         raw_stream_name: String,
         event_producer: ChannelEventProducer,
+        gop_num: usize,
     ) -> Self {
         let remote_addr = if let Ok(addr) = stream.peer_addr() {
             log::info!("server session: {}", addr.to_string());
@@ -125,6 +127,7 @@ impl ClientSession {
             client_type,
             sub_app_name: None,
             sub_stream_name: None,
+            gop_num,
         }
     }
 
@@ -246,10 +249,14 @@ impl ClientSession {
                 log::info!("[C <- S] on_stream_is_recorded...");
                 self.on_stream_is_recorded(stream_id)?;
             }
-            RtmpMessageData::AudioData { data } => self.common.on_audio_data(data, timestamp)?,
-            RtmpMessageData::VideoData { data } => self.common.on_video_data(data, timestamp)?,
+            RtmpMessageData::AudioData { data } => {
+                self.common.on_audio_data(data, timestamp).await?
+            }
+            RtmpMessageData::VideoData { data } => {
+                self.common.on_video_data(data, timestamp).await?
+            }
             RtmpMessageData::AmfData { raw_data } => {
-                self.common.on_meta_data(raw_data, timestamp)?;
+                self.common.on_meta_data(raw_data, timestamp).await?;
             }
 
             _ => {}
@@ -533,6 +540,7 @@ impl ClientSession {
                             self.app_name.clone(),
                             self.stream_name.clone(),
                             self.session_id,
+                            self.gop_num,
                         )
                         .await?
                 }

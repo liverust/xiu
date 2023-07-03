@@ -6,10 +6,12 @@ use {
         errors::{SessionError, SessionErrorValue},
     },
     crate::{
+        cache::Cache,
         channels::define::{
-            ChannelData, ChannelDataConsumer, ChannelDataProducer, ChannelEvent,
+            CacheDataSender, ChannelData, ChannelDataReceiver, ChannelDataSender, ChannelEvent,
             ChannelEventProducer,
         },
+        channels::errors::ChannelError,
         chunk::{
             define::{chunk_type, csid_type},
             packetizer::ChunkPacketizer,
@@ -20,6 +22,7 @@ use {
     bytes::BytesMut,
     bytesio::bytesio::BytesIO,
     serde::{Serialize, Serializer},
+    std::fmt,
     std::{net::SocketAddr, sync::Arc, time::Duration},
     tokio::{
         sync::{mpsc, oneshot, Mutex},
@@ -79,8 +82,8 @@ impl Serialize for PublisherInfo {
 pub struct Common {
     packetizer: ChunkPacketizer,
 
-    data_consumer: ChannelDataConsumer,
-    data_producer: ChannelDataProducer,
+    data_receiver: ChannelDataReceiver,
+    data_sender: ChannelDataSender,
 
     event_producer: ChannelEventProducer,
     pub session_type: SessionType,
@@ -89,6 +92,52 @@ pub struct Common {
     remote_addr: Option<SocketAddr>,
     /*request URL from client*/
     pub request_url: String,
+    /*cache is used to save RTMP sequence/gops/meta data
+    which needs to be send to client(player) */
+    /*The cache will be used in different threads(save
+    cache in one thread and send cache data to different clients
+    in other threads) */
+    pub cache: Option<Arc<Mutex<Cache>>>,
+}
+
+impl CacheDataSender for Common {
+    fn send(&mut self, sender: ChannelDataSender) -> Result<(), ChannelError> {
+        // if let Some(meta_body_data) = self.cache.get_metadata() {
+        //     sender.send(meta_body_data).map_err(|_| ChannelError {
+        //         value: ChannelErrorValue::SendError,
+        //     })?;
+        // }
+        // log::error!("Transmiter Subscribe info 1");
+        // if let Some(audio_seq_data) = self.cache.get_audio_seq() {
+        //     sender.send(audio_seq_data).map_err(|_| ChannelError {
+        //         value: ChannelErrorValue::SendError,
+        //     })?;
+        // }
+        //                 log::error!("Transmiter Subscribe info 2");
+        // if let Some(video_seq_data) = self.cache.get_video_seq() {
+        //     sender.send(video_seq_data).map_err(|_| ChannelError {
+        //         value: ChannelErrorValue::SendError,
+        //     })?;
+        // }
+
+        // match info.sub_type {
+        //     SubscribeType::PlayerRtmp
+        //     | SubscribeType::PlayerHttpFlv
+        //     | SubscribeType::PlayerHls
+        //     | SubscribeType::GenerateHls => {
+        //         if let Some(gops_data) = self.cache.get_gops_data() {
+        //             for gop in gops_data {
+        //                 for channel_data in gop.get_frame_data() {
+        //                     sender.send(channel_data).map_err(|_| ChannelError {
+        //                         value: ChannelErrorValue::SendError,
+        //                     })?;
+        //                 }
+        //             }
+        //         }
+        //     }
+
+        Ok(())
+    }
 }
 
 impl Common {
@@ -104,19 +153,20 @@ impl Common {
         Self {
             packetizer: ChunkPacketizer::new(Arc::clone(&net_io)),
 
-            data_producer: init_producer,
-            data_consumer: init_consumer,
+            data_sender: init_producer,
+            data_receiver: init_consumer,
 
             event_producer,
             session_type,
             remote_addr,
             request_url: String::default(),
+            cache: None,
         }
     }
     pub async fn send_channel_data(&mut self) -> Result<(), SessionError> {
         let mut retry_times = 0;
         loop {
-            if let Some(data) = self.data_consumer.recv().await {
+            if let Some(data) = self.data_receiver.recv().await {
                 match data {
                     ChannelData::Audio { timestamp, data } => {
                         self.send_audio(data, timestamp).await?;
@@ -195,17 +245,17 @@ impl Common {
         Ok(())
     }
 
-    pub fn on_video_data(
+    pub async fn on_video_data(
         &mut self,
         data: &mut BytesMut,
         timestamp: &u32,
     ) -> Result<(), SessionError> {
-        let data = ChannelData::Video {
+        let channel_data = ChannelData::Video {
             timestamp: *timestamp,
             data: data.clone(),
         };
 
-        match self.data_producer.send(data) {
+        match self.data_sender.send(channel_data) {
             Ok(_) => {}
             Err(err) => {
                 log::error!("send video err: {}", err);
@@ -215,20 +265,23 @@ impl Common {
             }
         }
 
+        if let Some(cache) = &mut self.cache {
+            cache.lock().await.save_video_data(data, *timestamp).await?;
+        }
         Ok(())
     }
 
-    pub fn on_audio_data(
+    pub async fn on_audio_data(
         &mut self,
         data: &mut BytesMut,
         timestamp: &u32,
     ) -> Result<(), SessionError> {
-        let data = ChannelData::Audio {
+        let channel_data = ChannelData::Audio {
             timestamp: *timestamp,
             data: data.clone(),
         };
 
-        match self.data_producer.send(data) {
+        match self.data_sender.send(channel_data) {
             Ok(_) => {}
             Err(err) => {
                 log::error!("receive audio err {}\n", err);
@@ -238,26 +291,34 @@ impl Common {
             }
         }
 
+        if let Some(cache) = &mut self.cache {
+            cache.lock().await.save_audio_data(data, *timestamp).await?;
+        }
+
         Ok(())
     }
 
-    pub fn on_meta_data(
+    pub async fn on_meta_data(
         &mut self,
-        body: &mut BytesMut,
+        data: &mut BytesMut,
         timestamp: &u32,
     ) -> Result<(), SessionError> {
-        let data = ChannelData::MetaData {
+        let channel_data = ChannelData::MetaData {
             timestamp: *timestamp,
-            data: body.clone(),
+            data: data.clone(),
         };
 
-        match self.data_producer.send(data) {
+        match self.data_sender.send(channel_data) {
             Ok(_) => {}
             Err(_) => {
                 return Err(SessionError {
                     value: SessionErrorValue::SendChannelDataErr,
                 })
             }
+        }
+
+        if let Some(cache) = &mut self.cache {
+            cache.lock().await.save_metadata(data, *timestamp);
         }
 
         Ok(())
@@ -337,13 +398,12 @@ impl Common {
         let mut retry_count: u8 = 0;
 
         loop {
-            let (sender, receiver) = oneshot::channel();
-
+            let (sender, receiver) = mpsc::unbounded_channel();
             let subscribe_event = ChannelEvent::Subscribe {
                 app_name: app_name.clone(),
                 stream_name: stream_name.clone(),
                 info: self.get_subscriber_info(sub_id),
-                responder: sender,
+                sender,
             };
             let rv = self.event_producer.send(subscribe_event);
 
@@ -353,19 +413,22 @@ impl Common {
                 });
             }
 
-            match receiver.await {
-                Ok(consumer) => {
-                    self.data_consumer = consumer;
-                    break;
-                }
-                Err(_) => {
-                    if retry_count > 10 {
-                        return Err(SessionError {
-                            value: SessionErrorValue::SubscribeCountLimitReach,
-                        });
-                    }
-                }
-            }
+            self.data_receiver = receiver;
+            break;
+
+            // match receiver.await {
+            //     Ok(consumer) => {
+            //         self.data_receiver = consumer;
+            //         break;
+            //     }
+            //     Err(_) => {
+            //         if retry_count > 10 {
+            //             return Err(SessionError {
+            //                 value: SessionErrorValue::SubscribeCountLimitReach,
+            //             });
+            //         }
+            //     }
+            // }
 
             sleep(Duration::from_millis(800)).await;
             retry_count += 1;
@@ -398,13 +461,23 @@ impl Common {
         app_name: String,
         stream_name: String,
         pub_id: Uuid,
+        gop_num: usize,
     ) -> Result<(), SessionError> {
-        let (sender, receiver) = oneshot::channel();
+        // let (sender, receiver) = oneshot::channel();
+
+        self.cache = Some(Arc::new(Mutex::new(Cache::new(
+            app_name.clone(),
+            stream_name.clone(),
+            gop_num,
+        ))));
+
+        let (sender, receiver) = mpsc::unbounded_channel();
         let publish_event = ChannelEvent::Publish {
             app_name,
             stream_name,
-            responder: sender,
+            receiver,
             info: self.get_publisher_info(pub_id),
+            cache_sender: Box::new(self) as Box<dyn CacheDataSender>,
         };
 
         let rv = self.event_producer.send(publish_event);
@@ -414,14 +487,8 @@ impl Common {
             });
         }
 
-        match receiver.await {
-            Ok(producer) => {
-                self.data_producer = producer;
-            }
-            Err(err) => {
-                log::error!("publish_to_channels err{}\n", err);
-            }
-        }
+        self.data_sender = sender;
+
         Ok(())
     }
 
@@ -463,5 +530,11 @@ impl Common {
             }
         }
         Ok(())
+    }
+}
+
+impl fmt::Debug for Common {
+    fn fmt(&self, fmt: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+        write!(fmt, "S2 {{ member: {:?} }}", self.request_url)
     }
 }

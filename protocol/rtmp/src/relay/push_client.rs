@@ -52,6 +52,7 @@ impl PushClient {
                         app_name.clone(),
                         stream_name.clone(),
                         self.channel_event_producer.clone(),
+                        0,
                     );
 
                     tokio::spawn(async move {

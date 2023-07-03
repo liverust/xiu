@@ -1,6 +1,7 @@
 use {
     crate::{
         amf0::errors::Amf0WriteError,
+        cache::errors::CacheError,
         chunk::errors::{PackError, UnpackError},
         handshake::errors::HandshakeError,
         messages::errors::MessageError,
@@ -47,6 +48,8 @@ pub enum SessionErrorValue {
     PackError(#[cause] PackError),
     #[fail(display = "handshake error: {}\n", _0)]
     HandshakeError(#[cause] HandshakeError),
+    #[fail(display = "cache error name: {}\n", _0)]
+    CacheError(#[cause] CacheError),
 
     #[fail(display = "amf0 count not correct error\n")]
     Amf0ValueCountNotCorrect,
@@ -164,6 +167,14 @@ impl From<HandshakeError> for SessionError {
     fn from(error: HandshakeError) -> Self {
         SessionError {
             value: SessionErrorValue::HandshakeError(error),
+        }
+    }
+}
+
+impl From<CacheError> for SessionError {
+    fn from(error: CacheError) -> Self {
+        SessionError {
+            value: SessionErrorValue::CacheError(error),
         }
     }
 }
