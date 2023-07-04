@@ -16,6 +16,7 @@ use {
     },
     errors::{ChannelError, ChannelErrorValue},
     std::collections::HashMap,
+    std::sync::Arc,
     tokio::sync::{broadcast, mpsc, mpsc::UnboundedReceiver},
     uuid::Uuid,
 };
@@ -52,8 +53,7 @@ pub struct Transmitter {
     subscriberid_to_producer: HashMap<Uuid, ChannelDataSender>,
     //used for cache metadata and GOP
     cache: Cache,
-    send_cache_data: SendCacheDataFn,
-    stream_handler: Box<dyn TStreamHandler>,
+    stream_handler: Arc<dyn TStreamHandler>,
 }
 
 impl Transmitter {
@@ -63,15 +63,13 @@ impl Transmitter {
         data_consumer: UnboundedReceiver<ChannelData>,
         event_consumer: UnboundedReceiver<TransmitterEvent>,
         gop_num: usize,
-        f: SendCacheDataFn,
-        h: Box<dyn TStreamHandler>,
+        h: Arc<dyn TStreamHandler>,
     ) -> Self {
         Self {
             data_consumer,
             event_consumer,
             subscriberid_to_producer: HashMap::new(),
             cache: Cache::new(app_name, stream_name, gop_num),
-            send_cache_data: f,
             stream_handler: h,
         }
     }
@@ -87,10 +85,12 @@ impl Transmitter {
                                 info,
                             } => {
 
-                                let  handler = &mut self.send_cache_data;
-                                let f =handler ;
-                                    //sleep(Duration::from_millis(1000)).await;
-                                    f(sender.clone(), info.sub_type).await?;
+                                // let  handler = &mut self.send_cache_data;
+                                // let f =handler ;
+                                //     //sleep(Duration::from_millis(1000)).await;
+                                //     f(sender.clone(), info.sub_type).await?;
+
+                                    self.stream_handler.send_cache_data(sender.clone(), info.sub_type).await?;
 
 
                                 // self.send_cache_data(sender,info.sub_type);
@@ -287,16 +287,9 @@ impl ChannelsManager {
                     stream_name,
                     receiver,
                     info,
-                    cache_sender,
                     stream_handler,
                 } => {
-                    let rv = self.publish(
-                        &app_name,
-                        &stream_name,
-                        receiver,
-                        cache_sender,
-                        stream_handler,
-                    );
+                    let rv = self.publish(&app_name, &stream_name, receiver, stream_handler);
                     match rv {
                         Ok(()) => {
                             // if responder.send(producer).is_err() {
@@ -560,8 +553,7 @@ impl ChannelsManager {
         app_name: &String,
         stream_name: &String,
         receiver: ChannelDataReceiver,
-        sender: SendCacheDataFn,
-        handler: Box<dyn TStreamHandler>,
+        handler: Arc<dyn TStreamHandler>,
     ) -> Result<(), ChannelError> {
         match self.channels.get_mut(app_name) {
             Some(val) => {
@@ -586,7 +578,6 @@ impl ChannelsManager {
                 receiver,
                 event_consumer,
                 self.rtmp_gop_num,
-                sender,
                 handler,
             );
 

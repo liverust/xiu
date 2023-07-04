@@ -21,6 +21,7 @@ use {
         messages::define::msg_type_id,
         statistics::StreamStatistics,
     },
+    async_trait::async_trait,
     bytes::BytesMut,
     bytesio::bytesio::BytesIO,
     serde::{Serialize, Serializer},
@@ -94,7 +95,7 @@ pub struct Common {
     remote_addr: Option<SocketAddr>,
     /*request URL from client*/
     pub request_url: String,
-    pub stream_handler: Arc<Mutex<StreamHandler>>,
+    pub stream_handler: Arc<StreamHandler>,
     /*cache is used to save RTMP sequence/gops/meta data
     which needs to be send to client(player) */
     /*The cache will be used in different threads(save
@@ -102,46 +103,6 @@ pub struct Common {
     in other threads) */
     // pub cache: Option<Arc<Mutex<Cache>>>,
 }
-
-// impl CacheDataSender for Common {
-//     fn send(&mut self, sender: ChannelDataSender) -> Result<(), ChannelError> {
-//         // if let Some(meta_body_data) = self.cache.get_metadata() {
-//         //     sender.send(meta_body_data).map_err(|_| ChannelError {
-//         //         value: ChannelErrorValue::SendError,
-//         //     })?;
-//         // }
-//         // log::error!("Transmiter Subscribe info 1");
-//         // if let Some(audio_seq_data) = self.cache.get_audio_seq() {
-//         //     sender.send(audio_seq_data).map_err(|_| ChannelError {
-//         //         value: ChannelErrorValue::SendError,
-//         //     })?;
-//         // }
-//         //                 log::error!("Transmiter Subscribe info 2");
-//         // if let Some(video_seq_data) = self.cache.get_video_seq() {
-//         //     sender.send(video_seq_data).map_err(|_| ChannelError {
-//         //         value: ChannelErrorValue::SendError,
-//         //     })?;
-//         // }
-
-//         // match info.sub_type {
-//         //     SubscribeType::PlayerRtmp
-//         //     | SubscribeType::PlayerHttpFlv
-//         //     | SubscribeType::PlayerHls
-//         //     | SubscribeType::GenerateHls => {
-//         //         if let Some(gops_data) = self.cache.get_gops_data() {
-//         //             for gop in gops_data {
-//         //                 for channel_data in gop.get_frame_data() {
-//         //                     sender.send(channel_data).map_err(|_| ChannelError {
-//         //                         value: ChannelErrorValue::SendError,
-//         //                     })?;
-//         //                 }
-//         //             }
-//         //         }
-//         //     }
-
-//         Ok(())
-//     }
-// }
 
 impl Common {
     pub fn new(
@@ -163,7 +124,7 @@ impl Common {
             session_type,
             remote_addr,
             request_url: String::default(),
-            stream_handler: Arc::new(Mutex::new(StreamHandler::new())),
+            stream_handler: Arc::new(StreamHandler::new()),
             //cache: None,
         }
     }
@@ -270,8 +231,6 @@ impl Common {
         }
 
         self.stream_handler
-            .lock()
-            .await
             .save_video_data(data, *timestamp)
             .await?;
 
@@ -302,8 +261,6 @@ impl Common {
         }
 
         self.stream_handler
-            .lock()
-            .await
             .save_audio_data(data, *timestamp)
             .await?;
 
@@ -333,10 +290,7 @@ impl Common {
             }
         }
 
-        self.stream_handler
-            .lock()
-            .await
-            .save_metadata(data, *timestamp);
+        self.stream_handler.save_metadata(data, *timestamp).await;
 
         // if let Some(cache) = &mut self.cache {
         //     cache.lock().await.save_metadata(data, *timestamp);
@@ -486,68 +440,60 @@ impl Common {
     ) -> Result<(), SessionError> {
         // let (sender, receiver) = oneshot::channel();
 
-        let cache = Arc::new(Mutex::new(Cache::new(
-            app_name.clone(),
-            stream_name.clone(),
-            gop_num,
-        )));
+        let cache = Cache::new(app_name.clone(), stream_name.clone(), gop_num);
 
-        self.cache = Some(cache.clone());
-        let cache_sender: SendCacheDataFn =
-            Box::new(move |sender: ChannelDataSender, sub_type: SubscribeType| {
-                let cache_clone_in = cache.clone();
-                Box::pin(async move {
-                    if let Some(meta_body_data) = cache_clone_in.lock().await.get_metadata() {
-                        sender.send(meta_body_data).map_err(|_| ChannelError {
-                            value: ChannelErrorValue::SendError,
-                        })?;
-                    }
-                    if let Some(audio_seq_data) = cache_clone_in.lock().await.get_audio_seq() {
-                        sender.send(audio_seq_data).map_err(|_| ChannelError {
-                            value: ChannelErrorValue::SendError,
-                        })?;
-                    }
-                    if let Some(video_seq_data) = cache_clone_in.lock().await.get_video_seq() {
-                        sender.send(video_seq_data).map_err(|_| ChannelError {
-                            value: ChannelErrorValue::SendError,
-                        })?;
-                    }
-                    match sub_type {
-                        SubscribeType::PlayerRtmp
-                        | SubscribeType::PlayerHttpFlv
-                        | SubscribeType::PlayerHls
-                        | SubscribeType::GenerateHls => {
-                            if let Some(gops_data) = cache_clone_in.lock().await.get_gops_data() {
-                                for gop in gops_data {
-                                    for channel_data in gop.get_frame_data() {
-                                        sender.send(channel_data).map_err(|_| ChannelError {
-                                            value: ChannelErrorValue::SendError,
-                                        })?;
-                                    }
-                                }
-                            }
-                        }
-                        SubscribeType::PublisherRtmp => {}
-                    }
-                    Ok(())
-                })
-            });
+        self.stream_handler.set_cache(cache).await;
+        // let cache_sender: SendCacheDataFn =
+        //     Box::new(move |sender: ChannelDataSender, sub_type: SubscribeType| {
+        //         let cache_clone_in = cache.clone();
+        //         Box::pin(async move {
+        //             if let Some(meta_body_data) = cache_clone_in.lock().await.get_metadata() {
+        //                 sender.send(meta_body_data).map_err(|_| ChannelError {
+        //                     value: ChannelErrorValue::SendError,
+        //                 })?;
+        //             }
+        //             if let Some(audio_seq_data) = cache_clone_in.lock().await.get_audio_seq() {
+        //                 sender.send(audio_seq_data).map_err(|_| ChannelError {
+        //                     value: ChannelErrorValue::SendError,
+        //                 })?;
+        //             }
+        //             if let Some(video_seq_data) = cache_clone_in.lock().await.get_video_seq() {
+        //                 sender.send(video_seq_data).map_err(|_| ChannelError {
+        //                     value: ChannelErrorValue::SendError,
+        //                 })?;
+        //             }
+        //             match sub_type {
+        //                 SubscribeType::PlayerRtmp
+        //                 | SubscribeType::PlayerHttpFlv
+        //                 | SubscribeType::PlayerHls
+        //                 | SubscribeType::GenerateHls => {
+        //                     if let Some(gops_data) = cache_clone_in.lock().await.get_gops_data() {
+        //                         for gop in gops_data {
+        //                             for channel_data in gop.get_frame_data() {
+        //                                 sender.send(channel_data).map_err(|_| ChannelError {
+        //                                     value: ChannelErrorValue::SendError,
+        //                                 })?;
+        //                             }
+        //                         }
+        //                     }
+        //                 }
+        //                 SubscribeType::PublisherRtmp => {}
+        //             }
+        //             Ok(())
+        //         })
+        //     });
 
         // let common = Common::new(net_io, event_producer, session_type, remote_addr);
 
         let (sender, receiver) = mpsc::unbounded_channel();
-
-        // Downcast to Arc<dyn TStreamHandler>
-        let dyn_stream_handler: Arc<dyn TStreamHandler> =
-            Arc::downcast(self.stream_handler.clone()).expect("Downcast failed");
 
         let publish_event = ChannelEvent::Publish {
             app_name,
             stream_name,
             receiver,
             info: self.get_publisher_info(pub_id),
-            cache_sender: cache_sender,
-            stream_handler: Box::new(self.stream_handler),
+
+            stream_handler: self.stream_handler.clone(),
         };
 
         let rv = self.event_producer.send(publish_event);
@@ -609,52 +555,94 @@ pub struct StreamHandler {
     /*The cache will be used in different threads(save
     cache in one thread and send cache data to different clients
     in other threads) */
-    pub cache: Option<Cache>,
+    pub cache: Mutex<Option<Cache>>,
 }
 
 impl StreamHandler {
     pub fn new() -> Self {
-        Self { cache: None }
+        Self {
+            cache: Mutex::new(None),
+        }
+    }
+
+    pub async fn set_cache(&self, cache: Cache) {
+        *self.cache.lock().await = Some(cache);
     }
 
     pub async fn save_video_data(
-        &mut self,
+        &self,
         chunk_body: &BytesMut,
         timestamp: u32,
     ) -> Result<(), CacheError> {
-        if let Some(cache) = &mut self.cache {
+        if let Some(cache) = &mut *self.cache.lock().await {
             cache.save_video_data(chunk_body, timestamp).await?;
         }
         Ok(())
     }
 
     pub async fn save_audio_data(
-        &mut self,
+        &self,
         chunk_body: &BytesMut,
         timestamp: u32,
     ) -> Result<(), CacheError> {
-        if let Some(cache) = &mut self.cache {
+        if let Some(cache) = &mut *self.cache.lock().await {
             cache.save_audio_data(chunk_body, timestamp).await?;
         }
         Ok(())
     }
 
-    pub fn save_metadata(&mut self, chunk_body: &BytesMut, timestamp: u32) {
-        if let Some(cache) = &mut self.cache {
+    pub async fn save_metadata(&self, chunk_body: &BytesMut, timestamp: u32) {
+        if let Some(cache) = &mut *self.cache.lock().await {
             cache.save_metadata(chunk_body, timestamp);
         }
     }
 }
 
+#[async_trait]
 impl TStreamHandler for StreamHandler {
-    fn send_cache_data(
+    async fn send_cache_data(
         &self,
         sender: ChannelDataSender,
         sub_type: SubscribeType,
     ) -> Result<(), ChannelError> {
+        if let Some(cache) = &mut *self.cache.lock().await {
+            if let Some(meta_body_data) = cache.get_metadata() {
+                sender.send(meta_body_data).map_err(|_| ChannelError {
+                    value: ChannelErrorValue::SendError,
+                })?;
+            }
+            if let Some(audio_seq_data) = cache.get_audio_seq() {
+                sender.send(audio_seq_data).map_err(|_| ChannelError {
+                    value: ChannelErrorValue::SendError,
+                })?;
+            }
+            if let Some(video_seq_data) = cache.get_video_seq() {
+                sender.send(video_seq_data).map_err(|_| ChannelError {
+                    value: ChannelErrorValue::SendError,
+                })?;
+            }
+            match sub_type {
+                SubscribeType::PlayerRtmp
+                | SubscribeType::PlayerHttpFlv
+                | SubscribeType::PlayerHls
+                | SubscribeType::GenerateHls => {
+                    if let Some(gops_data) = cache.get_gops_data() {
+                        for gop in gops_data {
+                            for channel_data in gop.get_frame_data() {
+                                sender.send(channel_data).map_err(|_| ChannelError {
+                                    value: ChannelErrorValue::SendError,
+                                })?;
+                            }
+                        }
+                    }
+                }
+                SubscribeType::PublisherRtmp => {}
+            }
+        }
+
         Ok(())
     }
-    fn get_statistic_data(&self) -> StreamStatistics {
+    async fn get_statistic_data(&self) -> StreamStatistics {
         StreamStatistics::default()
     }
 }

@@ -2,6 +2,7 @@ use {
     super::errors::ChannelError,
     crate::session::common::{PublisherInfo, SubscriberInfo},
     crate::statistics::StreamStatistics,
+    async_trait::async_trait,
     bytes::BytesMut,
     serde::Serialize,
     std::fmt,
@@ -42,13 +43,14 @@ pub type StreamStatisticSizeReceiver = oneshot::Sender<usize>;
 
 type ChannelResponder<T> = oneshot::Sender<T>;
 
+#[async_trait]
 pub trait TStreamHandler: Send + Sync {
-    fn send_cache_data(
+    async fn send_cache_data(
         &self,
         sender: ChannelDataSender,
         sub_type: SubscribeType,
     ) -> Result<(), ChannelError>;
-    fn get_statistic_data(&self) -> StreamStatistics;
+    async fn get_statistic_data(&self) -> StreamStatistics;
 }
 
 pub type SendCacheDataFn = Box<
@@ -81,9 +83,7 @@ pub enum ChannelEvent {
         #[serde(skip_serializing)]
         receiver: ChannelDataReceiver,
         #[serde(skip_serializing)]
-        cache_sender: SendCacheDataFn,
-        #[serde(skip_serializing)]
-        stream_handler: Box<dyn TStreamHandler>,
+        stream_handler: Arc<dyn TStreamHandler>,
     },
     UnPublish {
         app_name: String,
