@@ -41,9 +41,14 @@ pub type StreamStatisticSizeReceiver = oneshot::Sender<usize>;
 
 type ChannelResponder<T> = oneshot::Sender<T>;
 
-// pub trait CacheDataSender: fmt::Debug + Send {
-//     fn send(&mut self, sender: ChannelDataSender) -> Result<(), ChannelError>;
-// }
+pub trait TStreamHandler: Send {
+    fn send_cache_data(
+        &mut self,
+        sender: ChannelDataSender,
+        sub_type: SubscribeType,
+    ) -> Result<(), ChannelError>;
+    fn get_statistic_data(&self) -> StreamStatistics;
+}
 
 pub type SendCacheDataFn = Box<
     dyn (FnMut(
@@ -76,6 +81,8 @@ pub enum ChannelEvent {
         receiver: ChannelDataReceiver,
         #[serde(skip_serializing)]
         cache_sender: SendCacheDataFn,
+        #[serde(skip_serializing)]
+        stream_handler: Box<dyn TStreamHandler>,
     },
     UnPublish {
         app_name: String,

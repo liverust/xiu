@@ -11,7 +11,7 @@ use {
     define::{
         AvStatisticSender, ChannelData, ChannelDataReceiver, ChannelEvent, ChannelEventConsumer,
         ChannelEventProducer, ClientEvent, ClientEventConsumer, ClientEventProducer, PubSubInfo,
-        StreamStatisticSizeSender, TransmitterEvent, TransmitterEventConsumer,
+        StreamStatisticSizeSender, TStreamHandler, TransmitterEvent, TransmitterEventConsumer,
         TransmitterEventProducer,
     },
     errors::{ChannelError, ChannelErrorValue},
@@ -53,6 +53,7 @@ pub struct Transmitter {
     //used for cache metadata and GOP
     cache: Cache,
     send_cache_data: SendCacheDataFn,
+    stream_handler: Box<dyn TStreamHandler>,
 }
 
 impl Transmitter {
@@ -63,6 +64,7 @@ impl Transmitter {
         event_consumer: UnboundedReceiver<TransmitterEvent>,
         gop_num: usize,
         f: SendCacheDataFn,
+        h: Box<dyn TStreamHandler>,
     ) -> Self {
         Self {
             data_consumer,
@@ -70,6 +72,7 @@ impl Transmitter {
             subscriberid_to_producer: HashMap::new(),
             cache: Cache::new(app_name, stream_name, gop_num),
             send_cache_data: f,
+            stream_handler: h,
         }
     }
 
@@ -285,8 +288,15 @@ impl ChannelsManager {
                     receiver,
                     info,
                     cache_sender,
+                    stream_handler,
                 } => {
-                    let rv = self.publish(&app_name, &stream_name, receiver, cache_sender);
+                    let rv = self.publish(
+                        &app_name,
+                        &stream_name,
+                        receiver,
+                        cache_sender,
+                        stream_handler,
+                    );
                     match rv {
                         Ok(()) => {
                             // if responder.send(producer).is_err() {
@@ -551,6 +561,7 @@ impl ChannelsManager {
         stream_name: &String,
         receiver: ChannelDataReceiver,
         sender: SendCacheDataFn,
+        handler: Box<dyn TStreamHandler>,
     ) -> Result<(), ChannelError> {
         match self.channels.get_mut(app_name) {
             Some(val) => {
@@ -576,6 +587,7 @@ impl ChannelsManager {
                 event_consumer,
                 self.rtmp_gop_num,
                 sender,
+                handler,
             );
 
             let app_name_clone = app_name.clone();

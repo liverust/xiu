@@ -9,7 +9,7 @@ use {
         cache::Cache,
         channels::define::{
             ChannelData, ChannelDataReceiver, ChannelDataSender, ChannelEvent,
-            ChannelEventProducer, SendCacheDataFn,
+            ChannelEventProducer, SendCacheDataFn, TStreamHandler,
         },
         channels::errors::{ChannelError, ChannelErrorValue},
         chunk::{
@@ -18,6 +18,7 @@ use {
             ChunkInfo,
         },
         messages::define::msg_type_id,
+        statistics::StreamStatistics,
     },
     bytes::BytesMut,
     bytesio::bytesio::BytesIO,
@@ -512,6 +513,8 @@ impl Common {
                 })
             });
 
+            // let common = Common::new(net_io, event_producer, session_type, remote_addr);
+
         let (sender, receiver) = mpsc::unbounded_channel();
         let publish_event = ChannelEvent::Publish {
             app_name,
@@ -519,6 +522,7 @@ impl Common {
             receiver,
             info: self.get_publisher_info(pub_id),
             cache_sender: cache_sender,
+            stream_handler: Box::new(*self),
         };
 
         let rv = self.event_producer.send(publish_event);
@@ -571,6 +575,19 @@ impl Common {
             }
         }
         Ok(())
+    }
+}
+
+impl TStreamHandler for Common {
+    fn send_cache_data(
+        &mut self,
+        sender: ChannelDataSender,
+        sub_type: SubscribeType,
+    ) -> Result<(), ChannelError> {
+        Ok(())
+    }
+    fn get_statistic_data(&self) -> StreamStatistics {
+        StreamStatistics::default()
     }
 }
 
