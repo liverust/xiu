@@ -6,6 +6,7 @@ use {
         errors::{SessionError, SessionErrorValue},
     },
     crate::{
+        cache::errors::CacheError,
         cache::Cache,
         channels::define::{
             ChannelData, ChannelDataReceiver, ChannelDataSender, ChannelEvent,
@@ -93,12 +94,13 @@ pub struct Common {
     remote_addr: Option<SocketAddr>,
     /*request URL from client*/
     pub request_url: String,
+    pub stream_handler: Arc<Mutex<StreamHandler>>,
     /*cache is used to save RTMP sequence/gops/meta data
     which needs to be send to client(player) */
     /*The cache will be used in different threads(save
     cache in one thread and send cache data to different clients
     in other threads) */
-    pub cache: Option<Arc<Mutex<Cache>>>,
+    // pub cache: Option<Arc<Mutex<Cache>>>,
 }
 
 // impl CacheDataSender for Common {
@@ -161,7 +163,8 @@ impl Common {
             session_type,
             remote_addr,
             request_url: String::default(),
-            cache: None,
+            stream_handler: Arc::new(Mutex::new(StreamHandler::new())),
+            //cache: None,
         }
     }
     pub async fn send_channel_data(&mut self) -> Result<(), SessionError> {
@@ -266,9 +269,15 @@ impl Common {
             }
         }
 
-        if let Some(cache) = &mut self.cache {
-            cache.lock().await.save_video_data(data, *timestamp).await?;
-        }
+        self.stream_handler
+            .lock()
+            .await
+            .save_video_data(data, *timestamp)
+            .await?;
+
+        // if let Some(cache) = &mut self.cache {
+        //     cache.lock().await.save_video_data(data, *timestamp).await?;
+        // }
         Ok(())
     }
 
@@ -292,9 +301,15 @@ impl Common {
             }
         }
 
-        if let Some(cache) = &mut self.cache {
-            cache.lock().await.save_audio_data(data, *timestamp).await?;
-        }
+        self.stream_handler
+            .lock()
+            .await
+            .save_audio_data(data, *timestamp)
+            .await?;
+
+        // if let Some(cache) = &mut self.cache {
+        //     cache.lock().await.save_audio_data(data, *timestamp).await?;
+        // }
 
         Ok(())
     }
@@ -318,9 +333,14 @@ impl Common {
             }
         }
 
-        if let Some(cache) = &mut self.cache {
-            cache.lock().await.save_metadata(data, *timestamp);
-        }
+        self.stream_handler
+            .lock()
+            .await
+            .save_metadata(data, *timestamp);
+
+        // if let Some(cache) = &mut self.cache {
+        //     cache.lock().await.save_metadata(data, *timestamp);
+        // }
 
         Ok(())
     }
@@ -513,16 +533,21 @@ impl Common {
                 })
             });
 
-            // let common = Common::new(net_io, event_producer, session_type, remote_addr);
+        // let common = Common::new(net_io, event_producer, session_type, remote_addr);
 
         let (sender, receiver) = mpsc::unbounded_channel();
+
+        // Downcast to Arc<dyn TStreamHandler>
+        let dyn_stream_handler: Arc<dyn TStreamHandler> =
+            Arc::downcast(self.stream_handler.clone()).expect("Downcast failed");
+
         let publish_event = ChannelEvent::Publish {
             app_name,
             stream_name,
             receiver,
             info: self.get_publisher_info(pub_id),
             cache_sender: cache_sender,
-            stream_handler: Box::new(*self),
+            stream_handler: Box::new(self.stream_handler),
         };
 
         let rv = self.event_producer.send(publish_event);
@@ -578,9 +603,52 @@ impl Common {
     }
 }
 
-impl TStreamHandler for Common {
-    fn send_cache_data(
+pub struct StreamHandler {
+    /*cache is used to save RTMP sequence/gops/meta data
+    which needs to be send to client(player) */
+    /*The cache will be used in different threads(save
+    cache in one thread and send cache data to different clients
+    in other threads) */
+    pub cache: Option<Cache>,
+}
+
+impl StreamHandler {
+    pub fn new() -> Self {
+        Self { cache: None }
+    }
+
+    pub async fn save_video_data(
         &mut self,
+        chunk_body: &BytesMut,
+        timestamp: u32,
+    ) -> Result<(), CacheError> {
+        if let Some(cache) = &mut self.cache {
+            cache.save_video_data(chunk_body, timestamp).await?;
+        }
+        Ok(())
+    }
+
+    pub async fn save_audio_data(
+        &mut self,
+        chunk_body: &BytesMut,
+        timestamp: u32,
+    ) -> Result<(), CacheError> {
+        if let Some(cache) = &mut self.cache {
+            cache.save_audio_data(chunk_body, timestamp).await?;
+        }
+        Ok(())
+    }
+
+    pub fn save_metadata(&mut self, chunk_body: &BytesMut, timestamp: u32) {
+        if let Some(cache) = &mut self.cache {
+            cache.save_metadata(chunk_body, timestamp);
+        }
+    }
+}
+
+impl TStreamHandler for StreamHandler {
+    fn send_cache_data(
+        &self,
         sender: ChannelDataSender,
         sub_type: SubscribeType,
     ) -> Result<(), ChannelError> {

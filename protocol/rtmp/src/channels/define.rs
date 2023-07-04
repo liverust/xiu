@@ -11,6 +11,7 @@ use {
 
 use std::future::Future;
 use std::pin::Pin;
+use std::sync::Arc;
 
 use crate::session::define::SubscribeType;
 
@@ -41,9 +42,9 @@ pub type StreamStatisticSizeReceiver = oneshot::Sender<usize>;
 
 type ChannelResponder<T> = oneshot::Sender<T>;
 
-pub trait TStreamHandler: Send {
+pub trait TStreamHandler: Send + Sync {
     fn send_cache_data(
-        &mut self,
+        &self,
         sender: ChannelDataSender,
         sub_type: SubscribeType,
     ) -> Result<(), ChannelError>;
@@ -51,7 +52,7 @@ pub trait TStreamHandler: Send {
 }
 
 pub type SendCacheDataFn = Box<
-    dyn (FnMut(
+    dyn (Fn(
             ChannelDataSender,
             SubscribeType,
         ) -> Pin<Box<dyn Future<Output = Result<(), ChannelError>> + Send + 'static>>)
