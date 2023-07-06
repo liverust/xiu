@@ -109,6 +109,13 @@ impl BytesReader {
         Ok(val)
     }
 
+    pub fn read_u64<T: ByteOrder>(&mut self) -> Result<u64, BytesReadError> {
+        let mut cursor = self.read_bytes_cursor(8)?;
+        let val = cursor.read_u64::<T>()?;
+
+        Ok(val)
+    }
+
     pub fn get(&self, index: usize) -> Result<u8, BytesReadError> {
         if index >= self.len() {
             return Err(BytesReadError {

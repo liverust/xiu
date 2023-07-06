@@ -1,3 +1,6 @@
+use crate::rtp::rtcp::rtcp_header::RtcpHeader;
+use crate::rtp::rtcp::RTCP_SR;
+
 use super::rtp::rtp_aac::RtpAacPacker;
 use super::rtp::rtp_h264::RtpH264Packer;
 use super::rtp::rtp_h265::RtpH265Packer;
@@ -12,6 +15,9 @@ use super::rtp::utils::TUnPacker;
 use super::rtsp_codec::RtspCodecId;
 use super::rtsp_codec::RtspCodecInfo;
 use super::rtsp_transport::RtspTransport;
+use crate::rtp::utils::Unmarshal;
+use bytes::BytesMut;
+use bytesio::bytes_reader::BytesReader;
 
 trait Track {
     fn create_packer_unpacker(&mut self);
@@ -53,6 +59,21 @@ impl RtspTrack {
 
     pub fn set_transport(&mut self, transport: RtspTransport) {
         self.transport = transport;
+    }
+
+    pub fn on_rtp(&mut self, reader: &mut BytesReader) {
+        if let Some(unpacker) = &mut self.rtp_unpacker {
+            unpacker.unpack(reader);
+        }
+    }
+
+    pub fn on_rtcp(&self, reader: &mut BytesReader) {
+        if let Ok(rtcp_header) = RtcpHeader::unmarshal(reader) {
+            match rtcp_header.payload_type {
+                RTCP_SR => {}
+                _ => {}
+            }
+        }
     }
 }
 

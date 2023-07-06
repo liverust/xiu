@@ -13,7 +13,7 @@ use crate::rtsp_transport::RtspTransport;
 use crate::rtsp_utils;
 use byteorder::BigEndian;
 use bytes::BytesMut;
-use bytesio::bytes_reader::AsyncBytesReader;
+use bytesio::bytes_reader::BytesReader;
 use bytesio::bytes_writer::AsyncBytesWriter;
 use chrono::format::InternalFixed;
 use errors::SessionError;
@@ -31,7 +31,7 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 
 pub struct RtspServerSession {
-    reader: AsyncBytesReader,
+    reader: BytesReader,
     writer: AsyncBytesWriter,
     bytesio_data: BytesMut,
     transport: RtspTransport,
@@ -51,12 +51,12 @@ impl InterleavedBinaryData {
     // sign (24 hexadecimal), followed by a one-byte channel identifier,
     // followed by the length of the encapsulated binary data as a binary,
     // two-byte integer in network byte order
-    async fn new(reader: &mut AsyncBytesReader) -> Result<Option<Self>, SessionError> {
-        let is_dollar_sign = reader.advance_u8().await? == 0x24;
+    fn new(reader: &mut BytesReader) -> Result<Option<Self>, SessionError> {
+        let is_dollar_sign = reader.advance_u8()? == 0x24;
         if is_dollar_sign {
-            reader.read_u8().await?;
-            let channel_identifier = reader.read_u8().await?;
-            let length = reader.read_u16::<BigEndian>().await?;
+            reader.read_u8()?;
+            let channel_identifier = reader.read_u8()?;
+            let length = reader.read_u16::<BigEndian>()?;
             return Ok(Some(InterleavedBinaryData {
                 channel_identifier,
                 length,
@@ -69,7 +69,7 @@ impl InterleavedBinaryData {
 impl RtspServerSession {
     async fn run(&mut self) -> Result<(), SessionError> {
         loop {
-            if let Ok(data) = InterleavedBinaryData::new(&mut self.reader).await {
+            if let Ok(data) = InterleavedBinaryData::new(&mut self.reader) {
                 match data {
                     Some(a) => {
                         self.on_rtp_over_rtsp_message(a);
@@ -106,9 +106,7 @@ impl RtspServerSession {
     }
 
     async fn on_rtsp_message(&mut self) -> Result<(), SessionError> {
-        self.reader.read().await?;
-
-        let data = self.reader.bytes_reader.extract_remaining_bytes();
+        let data = self.reader.extract_remaining_bytes();
 
         if let Some(rtsp_request) = RtspRequest::unmarshal(std::str::from_utf8(&data)?) {
             match rtsp_request.method.as_str() {
@@ -230,12 +228,13 @@ impl RtspServerSession {
     }
 
     fn on_rtp_over_rtsp_message(&mut self, interleaved_binary_data: InterleavedBinaryData) {
-        for (k, v) in &self.tracks {
+        for (k, v) in &mut self.tracks {
             let rtp_identifier = v.transport.interleaved[0];
             let rtcp_identifier = v.transport.interleaved[1];
+
             match interleaved_binary_data.channel_identifier {
-                rtp_identifier => {}
-                rtcp_identifier => {}
+                rtp_identifier => v.on_rtp(&mut self.reader),
+                rtcp_identifier => v.on_rtcp(&mut self.reader),
                 _ => {}
             }
             //if v.transport.interleaved[0] == interleaved_binary_data.channel_identifier {}
