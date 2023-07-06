@@ -1,5 +1,4 @@
-use {crate::channels::define::ChannelData, std::collections::VecDeque};
-
+use {std::collections::VecDeque, streamhub::define::ChannelData};
 #[derive(Clone)]
 pub struct Gop {
     datas: Vec<ChannelData>,

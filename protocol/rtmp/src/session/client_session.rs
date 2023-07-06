@@ -5,10 +5,8 @@ use {
         define::SessionType,
         errors::{SessionError, SessionErrorValue},
     },
-    //crate::utils::print::print,
     crate::{
         amf0::Amf0ValueType,
-        channels::define::ChannelEventProducer,
         chunk::{
             define::CHUNK_SIZE,
             unpacketizer::{ChunkUnpacketizer, UnpackResult},
@@ -25,6 +23,8 @@ use {
     bytesio::{bytes_writer::AsyncBytesWriter, bytesio::BytesIO},
     indexmap::IndexMap,
     std::sync::Arc,
+    //crate::utils::print::print,
+    streamhub::define::ChannelEventProducer,
     tokio::{net::TcpStream, sync::Mutex},
     uuid::Uuid,
 };
@@ -79,6 +79,7 @@ pub struct ClientSession {
     client_type: ClientType,
     sub_app_name: Option<String>,
     sub_stream_name: Option<String>,
+    /*configure how many gops will be cached.*/
     gop_num: usize,
 }
 

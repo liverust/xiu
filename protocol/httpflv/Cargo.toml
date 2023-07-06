@@ -23,6 +23,7 @@ xflv = "0.2.0"
 # rtmp = "0.3.0"
 # xflv = { path = "../../library/container/flv/" }
 rtmp = { path = "../rtmp/" } #"0.0.4"
+streamhub = { path = "../../library/streamhub/" }
 
 [dependencies.tokio]
 version = "1.4.0"

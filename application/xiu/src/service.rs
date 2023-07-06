@@ -7,11 +7,10 @@ use {
     hls::server as hls_server,
     httpflv::server as httpflv_server,
     rtmp::{
-        channels::ChannelsManager,
-        notify::Notifier,
         relay::{pull_client::PullClient, push_client::PushClient},
         rtmp::RtmpServer,
     },
+    streamhub::{notify::Notifier, StreamsHub},
     tokio,
 };
 
@@ -40,7 +39,7 @@ impl Service {
             None
         };
 
-        let mut channel = ChannelsManager::new(notifier);
+        let mut channel = StreamsHub::new(notifier);
 
         self.start_httpflv(&mut channel).await?;
         self.start_hls(&mut channel).await?;
@@ -54,7 +53,7 @@ impl Service {
         Ok(())
     }
 
-    async fn start_http_api_server(&mut self, channel: &mut ChannelsManager) -> Result<()> {
+    async fn start_http_api_server(&mut self, channel: &mut StreamsHub) -> Result<()> {
         let producer = channel.get_channel_event_producer();
 
         let http_api_port = if let Some(httpapi) = &self.cfg.httpapi {
@@ -69,7 +68,7 @@ impl Service {
         Ok(())
     }
 
-    async fn start_rtmp(&mut self, channel: &mut ChannelsManager) -> Result<()> {
+    async fn start_rtmp(&mut self, channel: &mut StreamsHub) -> Result<()> {
         let rtmp_cfg = &self.cfg.rtmp;
 
         if let Some(rtmp_cfg_value) = rtmp_cfg {
@@ -83,7 +82,6 @@ impl Service {
                 1
             };
 
-            channel.set_rtmp_gop_num(gop_num);
             let producer = channel.get_channel_event_producer();
 
             /*static push */
@@ -152,7 +150,7 @@ impl Service {
         Ok(())
     }
 
-    async fn start_httpflv(&mut self, channel: &mut ChannelsManager) -> Result<()> {
+    async fn start_httpflv(&mut self, channel: &mut StreamsHub) -> Result<()> {
         let httpflv_cfg = &self.cfg.httpflv;
 
         if let Some(httpflv_cfg_value) = httpflv_cfg {
@@ -172,7 +170,7 @@ impl Service {
         Ok(())
     }
 
-    async fn start_hls(&mut self, channel: &mut ChannelsManager) -> Result<()> {
+    async fn start_hls(&mut self, channel: &mut StreamsHub) -> Result<()> {
         let hls_cfg = &self.cfg.hls;
 
         if let Some(hls_cfg_value) = hls_cfg {

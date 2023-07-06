@@ -7,7 +7,6 @@ use {
     },
     crate::{
         amf0::Amf0ValueType,
-        channels::define::ChannelEventProducer,
         chunk::{
             define::CHUNK_SIZE,
             unpacketizer::{ChunkUnpacketizer, UnpackResult},
@@ -25,6 +24,7 @@ use {
     bytesio::{bytes_writer::AsyncBytesWriter, bytesio::BytesIO},
     indexmap::IndexMap,
     std::{sync::Arc, time::Duration},
+    streamhub::define::ChannelEventProducer,
     tokio::{net::TcpStream, sync::Mutex},
     uuid::Uuid,
 };
@@ -55,6 +55,7 @@ pub struct ServerSession {
     pub session_id: Uuid,
     connect_properties: ConnectProperties,
     pub common: Common,
+    /*configure how many gops will be cached.*/
     gop_num: usize,
 }
 

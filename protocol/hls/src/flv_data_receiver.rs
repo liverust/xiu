@@ -1,17 +1,16 @@
+use streamhub::stream::StreamIdentifier;
+
 use {
     super::{
         errors::{HlsError, HlsErrorValue},
         flv2hls::Flv2HlsRemuxer,
     },
-    rtmp::channels::define::{
-        ChannelData, ChannelDataReceiver, ChannelEvent, ChannelEventProducer,
-    },
-    rtmp::session::{
-        common::{NotifyInfo, SubscriberInfo},
-        define::SubscribeType,
-        errors::{SessionError, SessionErrorValue},
-    },
+    rtmp::session::errors::{SessionError, SessionErrorValue},
     std::time::Duration,
+    streamhub::define::{
+        ChannelData, ChannelDataReceiver, ChannelEvent, ChannelEventProducer, NotifyInfo,
+        SubscribeType, SubscriberInfo,
+    },
     tokio::{
         sync::{mpsc, oneshot},
         time::sleep,
@@ -114,9 +113,13 @@ impl FlvDataReceiver {
                 },
             };
 
-            let subscribe_event = ChannelEvent::Subscribe {
+            let identifier = StreamIdentifier::Rtmp {
                 app_name: app_name.clone(),
                 stream_name: stream_name.clone(),
+            };
+
+            let subscribe_event = ChannelEvent::Subscribe {
+                identifier,
                 info: sub_info,
                 sender,
             };
@@ -167,9 +170,13 @@ impl FlvDataReceiver {
             },
         };
 
-        let subscribe_event = ChannelEvent::UnSubscribe {
+        let identifier = StreamIdentifier::Rtmp {
             app_name: self.app_name.clone(),
             stream_name: self.stream_name.clone(),
+        };
+
+        let subscribe_event = ChannelEvent::UnSubscribe {
+            identifier,
             info: sub_info,
         };
         if let Err(err) = self.event_producer.send(subscribe_event) {

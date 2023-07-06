@@ -4,10 +4,10 @@ use {
         routing::{get, post},
         Json, Router,
     },
-    rtmp::{channels::define, channels::define::ChannelEventProducer},
     serde::Deserialize,
     std::str::FromStr,
     std::sync::Arc,
+    streamhub::{define, define::ChannelEventProducer},
     uuid::Uuid,
     {
         tokio,

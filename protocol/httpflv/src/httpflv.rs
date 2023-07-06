@@ -5,15 +5,15 @@ use {
     },
     crate::rtmp::{
         cache::metadata::MetaData,
-        channels::define::{ChannelData, ChannelDataReceiver, ChannelEvent, ChannelEventProducer},
-        session::{
-            common::{NotifyInfo, SubscriberInfo},
-            define::SubscribeType,
-            errors::{SessionError, SessionErrorValue},
-        },
+        session::errors::{SessionError, SessionErrorValue},
     },
     bytes::BytesMut,
     std::{net::SocketAddr, time::Duration},
+    streamhub::define::{
+        ChannelData, ChannelDataReceiver, ChannelEvent, ChannelEventProducer, NotifyInfo,
+        SubscribeType, SubscriberInfo,
+    },
+    streamhub::stream::StreamIdentifier,
     tokio::{
         sync::{mpsc, oneshot},
         time::sleep,
@@ -152,9 +152,13 @@ impl HttpFlv {
             },
         };
 
-        let subscribe_event = ChannelEvent::UnSubscribe {
+        let identifier = StreamIdentifier::Rtmp {
             app_name: self.app_name.clone(),
             stream_name: self.stream_name.clone(),
+        };
+
+        let subscribe_event = ChannelEvent::UnSubscribe {
+            identifier,
             info: sub_info,
         };
         if let Err(err) = self.event_producer.send(subscribe_event) {
@@ -179,9 +183,13 @@ impl HttpFlv {
                 },
             };
 
-            let subscribe_event = ChannelEvent::Subscribe {
+            let identifier = StreamIdentifier::Rtmp {
                 app_name: self.app_name.clone(),
                 stream_name: self.stream_name.clone(),
+            };
+
+            let subscribe_event = ChannelEvent::Subscribe {
+                identifier,
                 info: sub_info,
                 sender,
             };

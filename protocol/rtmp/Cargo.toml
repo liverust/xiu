@@ -33,6 +33,7 @@ serde = { version = "1.0", features = ["derive", "rc"] }
 bytesio = "0.2.0"
 xflv = "0.2.0"
 h264-decoder = "0.1.0"
+streamhub = { path = "../../library/streamhub/" }
 
 # bytesio = { path = "../../library/bytesio/" }
 # xflv = { path = "../../library/container/flv/" }

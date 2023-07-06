@@ -2,24 +2,18 @@ use serde::ser::SerializeStruct;
 
 use {
     super::{
-        define::{PublishType, SessionType, SubscribeType},
+        define::SessionType,
         errors::{SessionError, SessionErrorValue},
     },
     crate::{
         cache::errors::CacheError,
         cache::Cache,
-        channels::define::{
-            ChannelData, ChannelDataReceiver, ChannelDataSender, ChannelEvent,
-            ChannelEventProducer, SendCacheDataFn, TStreamHandler,
-        },
-        channels::errors::{ChannelError, ChannelErrorValue},
         chunk::{
             define::{chunk_type, csid_type},
             packetizer::ChunkPacketizer,
             ChunkInfo,
         },
         messages::define::msg_type_id,
-        statistics::StreamStatistics,
     },
     async_trait::async_trait,
     bytes::BytesMut,
@@ -27,6 +21,16 @@ use {
     serde::{Serialize, Serializer},
     std::fmt,
     std::{net::SocketAddr, sync::Arc, time::Duration},
+    streamhub::{
+        define::{
+            ChannelData, ChannelDataReceiver, ChannelDataSender, ChannelEvent,
+            ChannelEventProducer, NotifyInfo, PubSubInfo, PublishType, PublisherInfo,
+            SubscribeType, SubscriberInfo, TStreamHandler,
+        },
+        errors::{ChannelError, ChannelErrorValue},
+        statistics::StreamStatistics,
+        stream::StreamIdentifier,
+    },
     tokio::{
         sync::{mpsc, oneshot, Mutex},
         time::sleep,
@@ -34,54 +38,54 @@ use {
     uuid::Uuid,
 };
 
-#[derive(Debug, Serialize, Clone)]
-pub struct NotifyInfo {
-    pub request_url: String,
-    pub remote_addr: String,
-}
-#[derive(Debug, Clone)]
-pub struct SubscriberInfo {
-    pub id: Uuid,
-    pub sub_type: SubscribeType,
-    pub notify_info: NotifyInfo,
-}
+// #[derive(Debug, Serialize, Clone)]
+// pub struct NotifyInfo {
+//     pub request_url: String,
+//     pub remote_addr: String,
+// }
+// #[derive(Debug, Clone)]
+// pub struct SubscriberInfo {
+//     pub id: Uuid,
+//     pub sub_type: SubscribeType,
+//     pub notify_info: NotifyInfo,
+// }
 
-impl Serialize for SubscriberInfo {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        // 3 is the number of fields in the struct.
-        let mut state = serializer.serialize_struct("SubscriberInfo", 3)?;
+// impl Serialize for SubscriberInfo {
+//     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+//     where
+//         S: Serializer,
+//     {
+//         // 3 is the number of fields in the struct.
+//         let mut state = serializer.serialize_struct("SubscriberInfo", 3)?;
 
-        state.serialize_field("id", &self.id.to_string())?;
-        state.serialize_field("sub_type", &self.sub_type)?;
-        state.serialize_field("notify_info", &self.notify_info)?;
-        state.end()
-    }
-}
+//         state.serialize_field("id", &self.id.to_string())?;
+//         state.serialize_field("sub_type", &self.sub_type)?;
+//         state.serialize_field("notify_info", &self.notify_info)?;
+//         state.end()
+//     }
+// }
 
-#[derive(Debug, Clone)]
-pub struct PublisherInfo {
-    pub id: Uuid,
-    pub sub_type: PublishType,
-    pub notify_info: NotifyInfo,
-}
+// #[derive(Debug, Clone)]
+// pub struct PublisherInfo {
+//     pub id: Uuid,
+//     pub sub_type: PublishType,
+//     pub notify_info: NotifyInfo,
+// }
 
-impl Serialize for PublisherInfo {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        // 3 is the number of fields in the struct.
-        let mut state = serializer.serialize_struct("PublisherInfo", 3)?;
+// impl Serialize for PublisherInfo {
+//     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+//     where
+//         S: Serializer,
+//     {
+//         // 3 is the number of fields in the struct.
+//         let mut state = serializer.serialize_struct("PublisherInfo", 3)?;
 
-        state.serialize_field("id", &self.id.to_string())?;
-        state.serialize_field("sub_type", &self.sub_type)?;
-        state.serialize_field("notify_info", &self.notify_info)?;
-        state.end()
-    }
-}
+//         state.serialize_field("id", &self.id.to_string())?;
+//         state.serialize_field("sub_type", &self.sub_type)?;
+//         state.serialize_field("notify_info", &self.notify_info)?;
+//         state.end()
+//     }
+// }
 pub struct Common {
     packetizer: ChunkPacketizer,
 
@@ -96,12 +100,6 @@ pub struct Common {
     /*request URL from client*/
     pub request_url: String,
     pub stream_handler: Arc<StreamHandler>,
-    /*cache is used to save RTMP sequence/gops/meta data
-    which needs to be send to client(player) */
-    /*The cache will be used in different threads(save
-    cache in one thread and send cache data to different clients
-    in other threads) */
-    // pub cache: Option<Arc<Mutex<Cache>>>,
 }
 
 impl Common {
@@ -234,9 +232,6 @@ impl Common {
             .save_video_data(data, *timestamp)
             .await?;
 
-        // if let Some(cache) = &mut self.cache {
-        //     cache.lock().await.save_video_data(data, *timestamp).await?;
-        // }
         Ok(())
     }
 
@@ -263,10 +258,6 @@ impl Common {
         self.stream_handler
             .save_audio_data(data, *timestamp)
             .await?;
-
-        // if let Some(cache) = &mut self.cache {
-        //     cache.lock().await.save_audio_data(data, *timestamp).await?;
-        // }
 
         Ok(())
     }
@@ -374,9 +365,14 @@ impl Common {
 
         loop {
             let (sender, receiver) = mpsc::unbounded_channel();
-            let subscribe_event = ChannelEvent::Subscribe {
+
+            let identifier = StreamIdentifier::Rtmp {
                 app_name: app_name.clone(),
                 stream_name: stream_name.clone(),
+            };
+
+            let subscribe_event = ChannelEvent::Subscribe {
+                identifier,
                 info: self.get_subscriber_info(sub_id),
                 sender,
             };
@@ -418,9 +414,13 @@ impl Common {
         stream_name: String,
         sub_id: Uuid,
     ) -> Result<(), SessionError> {
-        let subscribe_event = ChannelEvent::UnSubscribe {
+        let identifier = StreamIdentifier::Rtmp {
             app_name,
             stream_name,
+        };
+
+        let subscribe_event = ChannelEvent::UnSubscribe {
+            identifier,
             info: self.get_subscriber_info(sub_id),
         };
         if let Err(err) = self.event_producer.send(subscribe_event) {
@@ -438,61 +438,18 @@ impl Common {
         pub_id: Uuid,
         gop_num: usize,
     ) -> Result<(), SessionError> {
-        // let (sender, receiver) = oneshot::channel();
-
-        let cache = Cache::new(app_name.clone(), stream_name.clone(), gop_num);
-
-        self.stream_handler.set_cache(cache).await;
-        // let cache_sender: SendCacheDataFn =
-        //     Box::new(move |sender: ChannelDataSender, sub_type: SubscribeType| {
-        //         let cache_clone_in = cache.clone();
-        //         Box::pin(async move {
-        //             if let Some(meta_body_data) = cache_clone_in.lock().await.get_metadata() {
-        //                 sender.send(meta_body_data).map_err(|_| ChannelError {
-        //                     value: ChannelErrorValue::SendError,
-        //                 })?;
-        //             }
-        //             if let Some(audio_seq_data) = cache_clone_in.lock().await.get_audio_seq() {
-        //                 sender.send(audio_seq_data).map_err(|_| ChannelError {
-        //                     value: ChannelErrorValue::SendError,
-        //                 })?;
-        //             }
-        //             if let Some(video_seq_data) = cache_clone_in.lock().await.get_video_seq() {
-        //                 sender.send(video_seq_data).map_err(|_| ChannelError {
-        //                     value: ChannelErrorValue::SendError,
-        //                 })?;
-        //             }
-        //             match sub_type {
-        //                 SubscribeType::PlayerRtmp
-        //                 | SubscribeType::PlayerHttpFlv
-        //                 | SubscribeType::PlayerHls
-        //                 | SubscribeType::GenerateHls => {
-        //                     if let Some(gops_data) = cache_clone_in.lock().await.get_gops_data() {
-        //                         for gop in gops_data {
-        //                             for channel_data in gop.get_frame_data() {
-        //                                 sender.send(channel_data).map_err(|_| ChannelError {
-        //                                     value: ChannelErrorValue::SendError,
-        //                                 })?;
-        //                             }
-        //                         }
-        //                     }
-        //                 }
-        //                 SubscribeType::PublisherRtmp => {}
-        //             }
-        //             Ok(())
-        //         })
-        //     });
-
-        // let common = Common::new(net_io, event_producer, session_type, remote_addr);
+        self.stream_handler
+            .set_cache(Cache::new(app_name.clone(), stream_name.clone(), gop_num))
+            .await;
 
         let (sender, receiver) = mpsc::unbounded_channel();
-
         let publish_event = ChannelEvent::Publish {
-            app_name,
-            stream_name,
+            identifier: StreamIdentifier::Rtmp {
+                app_name,
+                stream_name,
+            },
             receiver,
             info: self.get_publisher_info(pub_id),
-
             stream_handler: self.stream_handler.clone(),
         };
 
@@ -504,7 +461,6 @@ impl Common {
         }
 
         self.data_sender = sender;
-
         Ok(())
     }
 
@@ -520,8 +476,10 @@ impl Common {
             stream_name
         );
         let unpublish_event = ChannelEvent::UnPublish {
-            app_name: app_name.clone(),
-            stream_name: stream_name.clone(),
+            identifier: StreamIdentifier::Rtmp {
+                app_name: app_name.clone(),
+                stream_name: stream_name.clone(),
+            },
             info: self.get_publisher_info(pub_id),
         };
 
@@ -642,8 +600,12 @@ impl TStreamHandler for StreamHandler {
 
         Ok(())
     }
-    async fn get_statistic_data(&self) -> StreamStatistics {
-        StreamStatistics::default()
+    async fn get_statistic_data(&self) -> Option<StreamStatistics> {
+        if let Some(cache) = &mut *self.cache.lock().await {
+            return Some(cache.av_statistics.get_avstatistic_data().await);
+        }
+
+        None
     }
 }
 

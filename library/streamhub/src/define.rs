@@ -1,10 +1,11 @@
 use {
     super::errors::ChannelError,
-    crate::session::common::{PublisherInfo, SubscriberInfo},
     crate::statistics::StreamStatistics,
     async_trait::async_trait,
     bytes::BytesMut,
+    serde::ser::SerializeStruct,
     serde::Serialize,
+    serde::Serializer,
     std::fmt,
     tokio::sync::{broadcast, mpsc, oneshot},
     uuid::Uuid,
@@ -14,7 +15,81 @@ use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
 
-use crate::session::define::SubscribeType;
+use crate::stream::StreamIdentifier;
+
+#[derive(Debug, Serialize, Clone, Eq, PartialEq)]
+pub enum SubscribeType {
+    /* Remote client request playing rtmp stream.*/
+    PlayerRtmp,
+    /* Remote client request playing http-flv stream.*/
+    PlayerHttpFlv,
+    /* Remote client request playing hls stream.*/
+    PlayerHls,
+    GenerateHls,
+    /* Local client *subscribe* from local rtmp session
+    and *publish* (relay push) the stream to remote server.*/
+    PublisherRtmp,
+}
+
+//session publish type
+#[derive(Debug, Serialize, Clone, Eq, PartialEq)]
+pub enum PublishType {
+    /* Receive rtmp stream from remote push client */
+    PushRtmp,
+    /* Local client *publish* the rtmp stream to local session,
+    the rtmp stream is *subscribed* (pull) from remote server.*/
+    SubscriberRtmp,
+}
+
+#[derive(Debug, Serialize, Clone)]
+pub struct NotifyInfo {
+    pub request_url: String,
+    pub remote_addr: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct SubscriberInfo {
+    pub id: Uuid,
+    pub sub_type: SubscribeType,
+    pub notify_info: NotifyInfo,
+}
+
+impl Serialize for SubscriberInfo {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        // 3 is the number of fields in the struct.
+        let mut state = serializer.serialize_struct("SubscriberInfo", 3)?;
+
+        state.serialize_field("id", &self.id.to_string())?;
+        state.serialize_field("sub_type", &self.sub_type)?;
+        state.serialize_field("notify_info", &self.notify_info)?;
+        state.end()
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct PublisherInfo {
+    pub id: Uuid,
+    pub sub_type: PublishType,
+    pub notify_info: NotifyInfo,
+}
+
+impl Serialize for PublisherInfo {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        // 3 is the number of fields in the struct.
+        let mut state = serializer.serialize_struct("PublisherInfo", 3)?;
+
+        state.serialize_field("id", &self.id.to_string())?;
+        state.serialize_field("sub_type", &self.sub_type)?;
+        state.serialize_field("notify_info", &self.notify_info)?;
+        state.end()
+    }
+}
 
 #[derive(Clone)]
 pub enum ChannelData {
@@ -41,8 +116,6 @@ pub type AvStatisticReceiver = mpsc::UnboundedReceiver<StreamStatistics>;
 pub type StreamStatisticSizeSender = oneshot::Sender<usize>;
 pub type StreamStatisticSizeReceiver = oneshot::Sender<usize>;
 
-type ChannelResponder<T> = oneshot::Sender<T>;
-
 #[async_trait]
 pub trait TStreamHandler: Send + Sync {
     async fn send_cache_data(
@@ -50,35 +123,23 @@ pub trait TStreamHandler: Send + Sync {
         sender: ChannelDataSender,
         sub_type: SubscribeType,
     ) -> Result<(), ChannelError>;
-    async fn get_statistic_data(&self) -> StreamStatistics;
+    async fn get_statistic_data(&self) -> Option<StreamStatistics>;
 }
-
-pub type SendCacheDataFn = Box<
-    dyn (Fn(
-            ChannelDataSender,
-            SubscribeType,
-        ) -> Pin<Box<dyn Future<Output = Result<(), ChannelError>> + Send + 'static>>)
-        + Send
-        + Sync,
->;
 
 #[derive(Serialize)]
 pub enum ChannelEvent {
     Subscribe {
-        app_name: String,
-        stream_name: String,
+        identifier: StreamIdentifier,
         info: SubscriberInfo,
         #[serde(skip_serializing)]
         sender: ChannelDataSender,
     },
     UnSubscribe {
-        app_name: String,
-        stream_name: String,
+        identifier: StreamIdentifier,
         info: SubscriberInfo,
     },
     Publish {
-        app_name: String,
-        stream_name: String,
+        identifier: StreamIdentifier,
         info: PublisherInfo,
         #[serde(skip_serializing)]
         receiver: ChannelDataReceiver,
@@ -86,8 +147,7 @@ pub enum ChannelEvent {
         stream_handler: Arc<dyn TStreamHandler>,
     },
     UnPublish {
-        app_name: String,
-        stream_name: String,
+        identifier: StreamIdentifier,
         info: PublisherInfo,
     },
     #[serde(skip_serializing)]
@@ -124,36 +184,22 @@ impl fmt::Display for TransmitterEvent {
 #[derive(Debug, Clone)]
 pub enum ClientEvent {
     /*Need publish(push) a stream to other rtmp server*/
-    Publish {
-        app_name: String,
-        stream_name: String,
-    },
-    UnPublish {
-        app_name: String,
-        stream_name: String,
-    },
+    Publish { identifier: StreamIdentifier },
+    UnPublish { identifier: StreamIdentifier },
     /*Need subscribe(pull) a stream from other rtmp server*/
-    Subscribe {
-        app_name: String,
-        stream_name: String,
-    },
-    UnSubscribe {
-        app_name: String,
-        stream_name: String,
-    },
+    Subscribe { identifier: StreamIdentifier },
+    UnSubscribe { identifier: StreamIdentifier },
 }
 
 //Used for kickoff
 #[derive(Debug, Clone)]
 pub enum PubSubInfo {
     Subscribe {
-        app_name: String,
-        stream_name: String,
+        identifier: StreamIdentifier,
         sub_info: SubscriberInfo,
     },
 
     Publish {
-        app_name: String,
-        stream_name: String,
+        identifier: StreamIdentifier,
     },
 }

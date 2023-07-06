@@ -1,12 +1,12 @@
 use {
     anyhow::Result,
     clap::{value_parser, Arg, Command},
-    rtmp::channels::ChannelsManager,
     rtmp::session::client_session::ClientSession,
     rtmp::session::client_session::ClientType,
     rtmp::utils::RtmpUrlParser,
     std::env,
     std::process::exit,
+    streamhub::StreamsHub,
     tokio::net::TcpStream,
     tokio::signal,
     tokio::time::Duration,
@@ -50,7 +50,7 @@ async fn main() -> Result<()> {
     let pull_rtmp_url = matches.get_one::<String>("pullrtmp").unwrap().clone();
     let push_rtmp_url = matches.get_one::<String>("pushrtmp").unwrap().clone();
 
-    let mut channel = ChannelsManager::new(None);
+    let mut channel = StreamsHub::new(None);
     let producer = channel.get_channel_event_producer();
     tokio::spawn(async move { channel.run().await });
 

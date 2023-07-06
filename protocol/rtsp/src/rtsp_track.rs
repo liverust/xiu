@@ -48,7 +48,6 @@ impl RtspTrack {
             ..Default::default()
         };
         rtsp_track.create_packer_unpacker();
-
         rtsp_track
     }
 

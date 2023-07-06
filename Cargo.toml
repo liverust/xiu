@@ -12,5 +12,5 @@ members = [
   "library/container/mpegts",
   "library/codec/h264",
   "library/logger",
-  "library/stream_hub",
+  "library/streamhub",
 ]

@@ -704,6 +704,7 @@ dependencies = [
  "hyper",
  "log",
  "rtmp",
+ "streamhub",
  "tokio",
  "tokio-util 0.6.10",
  "uuid 0.6.5",
@@ -785,6 +786,7 @@ dependencies = [
  "hyper",
  "log",
  "rtmp",
+ "streamhub",
  "tokio",
  "uuid 0.6.5",
  "xflv 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1229,6 +1231,7 @@ dependencies = [
  "env_logger",
  "log",
  "rtmp",
+ "streamhub",
  "tokio",
 ]
 
@@ -1379,6 +1382,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
+ "streamhub",
  "tokio",
  "uuid 0.6.5",
  "xflv 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1579,8 +1583,23 @@ dependencies = [
 ]
 
 [[package]]
-name = "stream_hub"
+name = "streamhub"
 version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "byteorder",
+ "bytes",
+ "chrono",
+ "failure",
+ "indexmap",
+ "log",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "tokio",
+ "uuid 0.6.5",
+ "xflv 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+]
 
 [[package]]
 name = "strsim"
@@ -2201,6 +2220,7 @@ dependencies = [
  "serde",
  "serde_derive",
  "serde_json",
+ "streamhub",
  "tokio",
  "tokio-metrics",
  "toml",

@@ -1,4 +1,4 @@
-use super::channels::define::ChannelEventProducer;
+use streamhub::define::ChannelEventProducer;
 
 use super::session::server_session;
 use std::net::SocketAddr;

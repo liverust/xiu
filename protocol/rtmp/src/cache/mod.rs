@@ -4,12 +4,13 @@ pub mod metadata;
 
 use {
     self::gop::Gops,
-    super::statistics::avstatistics::AvStatistics,
-    crate::channels::define::ChannelData,
     bytes::BytesMut,
     errors::CacheError,
     gop::Gop,
     std::collections::VecDeque,
+    streamhub::define::ChannelData,
+    streamhub::statistics::avstatistics::AvStatistics,
+    streamhub::stream::StreamIdentifier,
     xflv::{define, demuxer_tag, mpeg4_aac::Mpeg4AacProcessor, mpeg4_avc::Mpeg4AvcProcessor},
 };
 
@@ -34,6 +35,10 @@ impl Drop for Cache {
 
 impl Cache {
     pub fn new(app_name: String, stream_name: String, gop_num: usize) -> Self {
+        let identifier = StreamIdentifier::Rtmp {
+            app_name,
+            stream_name,
+        };
         let mut cache = Cache {
             metadata: metadata::MetaData::new(),
             metadata_timestamp: 0,
@@ -42,7 +47,7 @@ impl Cache {
             audio_seq: BytesMut::new(),
             audio_timestamp: 0,
             gops: Gops::new(gop_num),
-            av_statistics: AvStatistics::new(app_name, stream_name),
+            av_statistics: AvStatistics::new(identifier),
         };
         cache.av_statistics.start();
         cache

@@ -6,8 +6,8 @@ use {
         service::{make_service_fn, service_fn},
         Body, Request, Response, Server, StatusCode,
     },
-    rtmp::channels::define::ChannelEventProducer,
     std::net::SocketAddr,
+    streamhub::define::ChannelEventProducer,
 };
 
 type GenericError = Box<dyn std::error::Error + Send + Sync>;
