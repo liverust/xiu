@@ -149,7 +149,10 @@ pub struct RtpH265UnPacker {
 
 impl TUnPacker for RtpH265UnPacker {
     fn unpack(&mut self, reader: &mut BytesReader) -> Result<(), UnPackerError> {
-        let mut rtp_packet = RtpPacket::unmarshal(reader)?;
+        let rtp_packet = RtpPacket::unmarshal(reader)?;
+
+        self.timestamp = rtp_packet.header.timestamp;
+        self.sequence_number = rtp_packet.header.seq_number;
 
         if let Some(packet_type) = rtp_packet.payload.get(0) {
             match *packet_type >> 1 & 0x3F {

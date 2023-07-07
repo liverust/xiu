@@ -24,7 +24,7 @@ use {
     indexmap::IndexMap,
     std::sync::Arc,
     //crate::utils::print::print,
-    streamhub::define::ChannelEventProducer,
+    streamhub::define::StreamHubEventSender,
     tokio::{net::TcpStream, sync::Mutex},
     uuid::Uuid,
 };
@@ -90,7 +90,7 @@ impl ClientSession {
         raw_domain_name: String,
         app_name: String,
         raw_stream_name: String,
-        event_producer: ChannelEventProducer,
+        event_producer: StreamHubEventSender,
         gop_num: usize,
     ) -> Self {
         let remote_addr = if let Ok(addr) = stream.peer_addr() {

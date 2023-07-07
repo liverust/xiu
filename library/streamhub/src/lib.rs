@@ -7,9 +7,9 @@ pub mod stream;
 use {
     crate::notify::Notifier,
     define::{
-        AvStatisticSender, ChannelData, ChannelDataReceiver, ChannelDataSender, ChannelEvent,
-        ChannelEventConsumer, ChannelEventProducer, ClientEvent, ClientEventConsumer,
-        ClientEventProducer, PubSubInfo, StreamStatisticSizeSender, SubscribeType, SubscriberInfo,
+        AvStatisticSender, ClientEvent, ClientEventConsumer, ClientEventProducer, FrameData,
+        FrameDataReceiver, FrameDataSender, PubSubInfo, StreamHubEvent, StreamHubEventReceiver,
+        StreamHubEventSender, StreamStatisticSizeSender, SubscribeType, SubscriberInfo,
         TStreamHandler, TransmitterEvent, TransmitterEventConsumer, TransmitterEventProducer,
     },
     errors::{ChannelError, ChannelErrorValue},
@@ -23,17 +23,17 @@ use {
 //receive data from ChannelsManager and send to players/subscribers
 pub struct Transmitter {
     //used for receiving Audio/Video data
-    data_consumer: ChannelDataReceiver,
+    data_consumer: FrameDataReceiver,
     //used for receiving event
     event_consumer: TransmitterEventConsumer,
     //used for sending audio/video data to players/subscribers
-    subscriberid_to_producer: HashMap<Uuid, ChannelDataSender>,
+    subscriberid_to_producer: HashMap<Uuid, FrameDataSender>,
     stream_handler: Arc<dyn TStreamHandler>,
 }
 
 impl Transmitter {
     fn new(
-        data_consumer: UnboundedReceiver<ChannelData>,
+        data_consumer: UnboundedReceiver<FrameData>,
         event_consumer: UnboundedReceiver<TransmitterEvent>,
         h: Arc<dyn TStreamHandler>,
     ) -> Self {
@@ -78,11 +78,11 @@ impl Transmitter {
                 data = self.data_consumer.recv() => {
                     if let Some(val) = data {
                         match val {
-                            ChannelData::MetaData { timestamp, data } => {
+                            FrameData::MetaData { timestamp, data } => {
 
                             }
-                            ChannelData::Audio { timestamp, data } => {
-                                let data = ChannelData::Audio {
+                            FrameData::Audio { timestamp, data } => {
+                                let data = FrameData::Audio {
                                     timestamp,
                                     data: data.clone(),
                                 };
@@ -95,8 +95,8 @@ impl Transmitter {
                                     }
                                 }
                             }
-                            ChannelData::Video { timestamp, data } => {
-                                let data = ChannelData::Video {
+                            FrameData::Video { timestamp, data } => {
+                                let data = FrameData::Video {
                                     timestamp,
                                     data: data.clone(),
                                 };
@@ -124,9 +124,9 @@ pub struct StreamsHub {
     //save info to kick off client
     channels_info: HashMap<Uuid, PubSubInfo>,
     //event is consumed in Channels, produced from other rtmp sessions
-    channel_event_consumer: ChannelEventConsumer,
+    channel_event_consumer: StreamHubEventReceiver,
     //event is produced from other rtmp sessions
-    channel_event_producer: ChannelEventProducer,
+    channel_event_producer: StreamHubEventSender,
     //client_event_producer: client_event_producer
     client_event_producer: ClientEventProducer,
     //The rtmp static push/pull and the hls transfer is triggered actively,
@@ -173,7 +173,7 @@ impl StreamsHub {
         self.hls_enabled = enabled;
     }
 
-    pub fn get_channel_event_producer(&mut self) -> ChannelEventProducer {
+    pub fn get_channel_event_producer(&mut self) -> StreamHubEventSender {
         self.channel_event_producer.clone()
     }
 
@@ -191,7 +191,7 @@ impl StreamsHub {
             };
 
             match message {
-                ChannelEvent::Publish {
+                StreamHubEvent::Publish {
                     identifier,
                     receiver,
                     info,
@@ -213,7 +213,7 @@ impl StreamsHub {
                     }
                 }
 
-                ChannelEvent::UnPublish {
+                StreamHubEvent::UnPublish {
                     identifier,
                     info: _,
                 } => {
@@ -229,7 +229,7 @@ impl StreamsHub {
                         notifier.on_unpublish_notify(event_serialize_str).await;
                     }
                 }
-                ChannelEvent::Subscribe {
+                StreamHubEvent::Subscribe {
                     identifier,
                     info,
                     sender,
@@ -256,7 +256,7 @@ impl StreamsHub {
                         }
                     }
                 }
-                ChannelEvent::UnSubscribe { identifier, info } => {
+                StreamHubEvent::UnSubscribe { identifier, info } => {
                     if self.unsubscribe(&identifier, info).is_ok() {
                         if let Some(notifier) = &self.notifier {
                             notifier.on_stop_notify(event_serialize_str).await;
@@ -264,7 +264,7 @@ impl StreamsHub {
                     }
                 }
 
-                ChannelEvent::ApiStatistic {
+                StreamHubEvent::ApiStatistic {
                     data_sender,
                     size_sender,
                 } => {
@@ -272,7 +272,7 @@ impl StreamsHub {
                         log::error!("event_loop api error: {}", err);
                     }
                 }
-                ChannelEvent::ApiKickClient { id } => {
+                StreamHubEvent::ApiKickClient { id } => {
                     self.api_kick_off_client(id);
 
                     if let Some(notifier) = &self.notifier {
@@ -348,7 +348,7 @@ impl StreamsHub {
         &mut self,
         identifer: &StreamIdentifier,
         sub_info: SubscriberInfo,
-        sender: ChannelDataSender,
+        sender: FrameDataSender,
     ) -> Result<(), ChannelError> {
         if let Some(producer) = self.channels.get_mut(identifer) {
             let event = TransmitterEvent::Subscribe {
@@ -409,7 +409,7 @@ impl StreamsHub {
     pub fn publish(
         &mut self,
         identifier: StreamIdentifier,
-        receiver: ChannelDataReceiver,
+        receiver: FrameDataReceiver,
         handler: Arc<dyn TStreamHandler>,
     ) -> Result<(), ChannelError> {
         if self.channels.get(&identifier).is_some() {
@@ -419,7 +419,6 @@ impl StreamsHub {
         }
 
         let (event_publisher, event_consumer) = mpsc::unbounded_channel();
-
         let mut transmitter = Transmitter::new(receiver, event_consumer, handler);
 
         let identifier_clone = identifier.clone();

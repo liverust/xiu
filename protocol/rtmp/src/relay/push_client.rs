@@ -2,7 +2,7 @@ use {
     super::errors::ClientError,
     crate::session::client_session::{ClientSession, ClientType},
     streamhub::{
-        define::{ChannelEventProducer, ClientEvent, ClientEventConsumer},
+        define::{StreamHubEventSender, ClientEvent, ClientEventConsumer},
         stream::StreamIdentifier,
     },
     tokio::net::TcpStream,
@@ -11,14 +11,14 @@ use {
 pub struct PushClient {
     address: String,
     client_event_consumer: ClientEventConsumer,
-    channel_event_producer: ChannelEventProducer,
+    channel_event_producer: StreamHubEventSender,
 }
 
 impl PushClient {
     pub fn new(
         address: String,
         consumer: ClientEventConsumer,
-        producer: ChannelEventProducer,
+        producer: StreamHubEventSender,
     ) -> Self {
         Self {
             address,

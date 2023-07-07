@@ -1,12 +1,14 @@
 use crate::rtp::utils;
 use crate::rtp::RtpPacket;
 use bytes::BytesMut;
+use std::time::SystemTime;
 
 use super::{
     rtcp_app::RtcpApp,
     rtcp_bye::RtcpBye,
     rtcp_header::RtcpHeader,
     rtcp_rr::{ReportBlock, RtcpReceiverReport},
+    rtcp_sr::RtcpSenderReport,
     RTCP_RR,
 };
 
@@ -129,6 +131,14 @@ impl RtcpContext {
         self.send_bytes += pkt.payload.len() as u64;
         self.send_packets += 1;
         self.last_rtp_timestamp = pkt.header.timestamp;
+    }
+
+    pub fn received_sr(&mut self, sr: &RtcpSenderReport) {
+        if let Ok(time) = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH) {
+            self.sr_clock_time = (time.as_nanos() / 1000) as u64;
+        }
+        self.sr_ntp_lsr = sr.ntp;
+        self.sender_ssrc = sr.ssrc;
     }
 
     pub fn received_rtp(&mut self, pkt: RtpPacket) {}

@@ -1,18 +1,18 @@
 use {
     super::{errors::HlsError, flv_data_receiver::FlvDataReceiver},
     streamhub::{
-        define::{ChannelEventProducer, ClientEvent, ClientEventConsumer},
+        define::{StreamHubEventSender, ClientEvent, ClientEventConsumer},
         stream::StreamIdentifier,
     },
 };
 
 pub struct RtmpEventProcessor {
     client_event_consumer: ClientEventConsumer,
-    event_producer: ChannelEventProducer,
+    event_producer: StreamHubEventSender,
 }
 
 impl RtmpEventProcessor {
-    pub fn new(consumer: ClientEventConsumer, event_producer: ChannelEventProducer) -> Self {
+    pub fn new(consumer: ClientEventConsumer, event_producer: StreamHubEventSender) -> Self {
         Self {
             client_event_consumer: consumer,
             event_producer,

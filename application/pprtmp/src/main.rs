@@ -50,9 +50,9 @@ async fn main() -> Result<()> {
     let pull_rtmp_url = matches.get_one::<String>("pullrtmp").unwrap().clone();
     let push_rtmp_url = matches.get_one::<String>("pushrtmp").unwrap().clone();
 
-    let mut channel = StreamsHub::new(None);
-    let producer = channel.get_channel_event_producer();
-    tokio::spawn(async move { channel.run().await });
+    let mut stream_hub = StreamsHub::new(None);
+    let producer = stream_hub.get_channel_event_producer();
+    tokio::spawn(async move { stream_hub.run().await });
 
     let mut pull_parser = RtmpUrlParser::new(pull_rtmp_url);
     if let Err(err) = pull_parser.parse_url() {

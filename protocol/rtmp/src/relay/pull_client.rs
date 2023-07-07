@@ -3,21 +3,21 @@ use streamhub::stream::StreamIdentifier;
 use {
     super::errors::ClientError,
     crate::session::client_session::{ClientSession, ClientType},
-    streamhub::define::{ChannelEventProducer, ClientEvent, ClientEventConsumer},
+    streamhub::define::{StreamHubEventSender, ClientEvent, ClientEventConsumer},
     tokio::net::TcpStream,
 };
 
 pub struct PullClient {
     address: String,
     client_event_consumer: ClientEventConsumer,
-    channel_event_producer: ChannelEventProducer,
+    channel_event_producer: StreamHubEventSender,
 }
 
 impl PullClient {
     pub fn new(
         address: String,
         consumer: ClientEventConsumer,
-        producer: ChannelEventProducer,
+        producer: StreamHubEventSender,
     ) -> Self {
         Self {
             address,

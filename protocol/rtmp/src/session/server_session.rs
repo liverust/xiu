@@ -24,7 +24,7 @@ use {
     bytesio::{bytes_writer::AsyncBytesWriter, bytesio::BytesIO},
     indexmap::IndexMap,
     std::{sync::Arc, time::Duration},
-    streamhub::define::ChannelEventProducer,
+    streamhub::define::StreamHubEventSender,
     tokio::{net::TcpStream, sync::Mutex},
     uuid::Uuid,
 };
@@ -60,7 +60,7 @@ pub struct ServerSession {
 }
 
 impl ServerSession {
-    pub fn new(stream: TcpStream, event_producer: ChannelEventProducer, gop_num: usize) -> Self {
+    pub fn new(stream: TcpStream, event_producer: StreamHubEventSender, gop_num: usize) -> Self {
         let remote_addr = if let Ok(addr) = stream.peer_addr() {
             log::info!("server session: {}", addr.to_string());
             Some(addr)

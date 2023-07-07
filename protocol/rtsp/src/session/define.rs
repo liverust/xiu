@@ -1,4 +1,5 @@
 use crate::sdp::rtpmap;
+use std::fmt;
 
 pub mod rtsp_method_name {
     pub const OPTIONS: &str = "OPTIONS";
@@ -26,4 +27,19 @@ pub mod rtsp_method_name {
         REDIRECT,
         RECORD,
     ];
+}
+
+pub enum SessionType {
+    Client,
+    Server,
+}
+
+impl fmt::Display for SessionType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let client_type = match self {
+            SessionType::Client => String::from("client"),
+            SessionType::Server => String::from("server"),
+        };
+        write!(f, "{client_type}")
+    }
 }

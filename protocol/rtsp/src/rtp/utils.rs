@@ -16,14 +16,14 @@ pub trait Marshal<T> {
     fn marshal(&self) -> T;
 }
 
-pub trait TPacker {
+pub trait TPacker: Send {
     fn pack(&mut self, nalus: &mut BytesMut) -> Result<(), PackerError>;
 }
 pub trait TRtpPacker: TPacker {
     fn pack_nalu(&mut self, nalu: BytesMut) -> Result<(), PackerError>;
 }
 
-pub trait TUnPacker {
+pub trait TUnPacker: Send {
     fn unpack(&mut self, reader: &mut BytesReader) -> Result<(), UnPackerError>;
 }
 

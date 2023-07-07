@@ -10,8 +10,8 @@ use {
     bytes::BytesMut,
     std::{net::SocketAddr, time::Duration},
     streamhub::define::{
-        ChannelData, ChannelDataReceiver, ChannelEvent, ChannelEventProducer, NotifyInfo,
-        SubscribeType, SubscriberInfo,
+        FrameData, FrameDataReceiver, StreamHubEventSender, NotifyInfo, StreamHubEvent, SubscribeType,
+        SubscriberInfo,
     },
     streamhub::stream::StreamIdentifier,
     tokio::{
@@ -28,8 +28,8 @@ pub struct HttpFlv {
 
     muxer: FlvMuxer,
 
-    event_producer: ChannelEventProducer,
-    data_consumer: ChannelDataReceiver,
+    event_producer: StreamHubEventSender,
+    data_consumer: FrameDataReceiver,
     http_response_data_producer: HttpResponseDataProducer,
     subscriber_id: Uuid,
     request_url: String,
@@ -40,7 +40,7 @@ impl HttpFlv {
     pub fn new(
         app_name: String,
         stream_name: String,
-        event_producer: ChannelEventProducer,
+        event_producer: StreamHubEventSender,
         http_response_data_producer: HttpResponseDataProducer,
         request_url: String,
         remote_addr: SocketAddr,
@@ -93,25 +93,25 @@ impl HttpFlv {
         self.unsubscribe_from_rtmp_channels().await
     }
 
-    pub fn write_flv_tag(&mut self, channel_data: ChannelData) -> Result<(), HttpFLvError> {
+    pub fn write_flv_tag(&mut self, channel_data: FrameData) -> Result<(), HttpFLvError> {
         let common_data: BytesMut;
         let common_timestamp: u32;
         let tag_type: u8;
 
         match channel_data {
-            ChannelData::Audio { timestamp, data } => {
+            FrameData::Audio { timestamp, data } => {
                 common_data = data;
                 common_timestamp = timestamp;
                 tag_type = tag_type::AUDIO;
             }
 
-            ChannelData::Video { timestamp, data } => {
+            FrameData::Video { timestamp, data } => {
                 common_data = data;
                 common_timestamp = timestamp;
                 tag_type = tag_type::VIDEO;
             }
 
-            ChannelData::MetaData { timestamp, data } => {
+            FrameData::MetaData { timestamp, data } => {
                 let mut metadata = MetaData::new();
                 metadata.save(&data);
                 let data = metadata.remove_set_data_frame()?;
@@ -157,7 +157,7 @@ impl HttpFlv {
             stream_name: self.stream_name.clone(),
         };
 
-        let subscribe_event = ChannelEvent::UnSubscribe {
+        let subscribe_event = StreamHubEvent::UnSubscribe {
             identifier,
             info: sub_info,
         };
@@ -188,7 +188,7 @@ impl HttpFlv {
                 stream_name: self.stream_name.clone(),
             };
 
-            let subscribe_event = ChannelEvent::Subscribe {
+            let subscribe_event = StreamHubEvent::Subscribe {
                 identifier,
                 info: sub_info,
                 sender,
@@ -198,7 +198,7 @@ impl HttpFlv {
 
             if rv.is_err() {
                 let session_error = SessionError {
-                    value: SessionErrorValue::SendChannelDataErr,
+                    value: SessionErrorValue::SendFrameDataErr,
                 };
                 return Err(HttpFLvError {
                     value: HttpFLvErrorValue::SessionError(session_error),

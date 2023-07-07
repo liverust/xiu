@@ -1,7 +1,7 @@
-use {std::collections::VecDeque, streamhub::define::ChannelData};
+use {std::collections::VecDeque, streamhub::define::FrameData};
 #[derive(Clone)]
 pub struct Gop {
-    datas: Vec<ChannelData>,
+    datas: Vec<FrameData>,
 }
 
 impl Default for Gop {
@@ -15,11 +15,11 @@ impl Gop {
         Self { datas: Vec::new() }
     }
 
-    fn save_frame_data(&mut self, data: ChannelData) {
+    fn save_frame_data(&mut self, data: FrameData) {
         self.datas.push(data);
     }
 
-    pub fn get_frame_data(self) -> Vec<ChannelData> {
+    pub fn get_frame_data(self) -> Vec<FrameData> {
         self.datas
     }
 
@@ -52,7 +52,7 @@ impl Gops {
         }
     }
 
-    pub fn save_frame_data(&mut self, data: ChannelData, is_key_frame: bool) {
+    pub fn save_frame_data(&mut self, data: FrameData, is_key_frame: bool) {
         if self.size == 0 {
             return;
         }

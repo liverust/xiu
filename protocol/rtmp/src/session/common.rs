@@ -23,9 +23,9 @@ use {
     std::{net::SocketAddr, sync::Arc, time::Duration},
     streamhub::{
         define::{
-            ChannelData, ChannelDataReceiver, ChannelDataSender, ChannelEvent,
-            ChannelEventProducer, NotifyInfo, PubSubInfo, PublishType, PublisherInfo,
-            SubscribeType, SubscriberInfo, TStreamHandler,
+            FrameData, FrameDataReceiver, FrameDataSender, NotifyInfo, PubSubInfo, PublishType,
+            PublisherInfo, StreamHubEvent, StreamHubEventSender, SubscribeType, SubscriberInfo,
+            TStreamHandler,
         },
         errors::{ChannelError, ChannelErrorValue},
         statistics::StreamStatistics,
@@ -38,74 +38,26 @@ use {
     uuid::Uuid,
 };
 
-// #[derive(Debug, Serialize, Clone)]
-// pub struct NotifyInfo {
-//     pub request_url: String,
-//     pub remote_addr: String,
-// }
-// #[derive(Debug, Clone)]
-// pub struct SubscriberInfo {
-//     pub id: Uuid,
-//     pub sub_type: SubscribeType,
-//     pub notify_info: NotifyInfo,
-// }
-
-// impl Serialize for SubscriberInfo {
-//     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-//     where
-//         S: Serializer,
-//     {
-//         // 3 is the number of fields in the struct.
-//         let mut state = serializer.serialize_struct("SubscriberInfo", 3)?;
-
-//         state.serialize_field("id", &self.id.to_string())?;
-//         state.serialize_field("sub_type", &self.sub_type)?;
-//         state.serialize_field("notify_info", &self.notify_info)?;
-//         state.end()
-//     }
-// }
-
-// #[derive(Debug, Clone)]
-// pub struct PublisherInfo {
-//     pub id: Uuid,
-//     pub sub_type: PublishType,
-//     pub notify_info: NotifyInfo,
-// }
-
-// impl Serialize for PublisherInfo {
-//     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-//     where
-//         S: Serializer,
-//     {
-//         // 3 is the number of fields in the struct.
-//         let mut state = serializer.serialize_struct("PublisherInfo", 3)?;
-
-//         state.serialize_field("id", &self.id.to_string())?;
-//         state.serialize_field("sub_type", &self.sub_type)?;
-//         state.serialize_field("notify_info", &self.notify_info)?;
-//         state.end()
-//     }
-// }
 pub struct Common {
     packetizer: ChunkPacketizer,
 
-    data_receiver: ChannelDataReceiver,
-    data_sender: ChannelDataSender,
+    data_receiver: FrameDataReceiver,
+    data_sender: FrameDataSender,
 
-    event_producer: ChannelEventProducer,
+    event_producer: StreamHubEventSender,
     pub session_type: SessionType,
 
     /*save the client side socket connected to the SeverSession */
     remote_addr: Option<SocketAddr>,
     /*request URL from client*/
     pub request_url: String,
-    pub stream_handler: Arc<StreamHandler>,
+    pub stream_handler: Arc<RtmpStreamHandler>,
 }
 
 impl Common {
     pub fn new(
         net_io: Arc<Mutex<BytesIO>>,
-        event_producer: ChannelEventProducer,
+        event_producer: StreamHubEventSender,
         session_type: SessionType,
         remote_addr: Option<SocketAddr>,
     ) -> Self {
@@ -122,7 +74,7 @@ impl Common {
             session_type,
             remote_addr,
             request_url: String::default(),
-            stream_handler: Arc::new(StreamHandler::new()),
+            stream_handler: Arc::new(RtmpStreamHandler::new()),
             //cache: None,
         }
     }
@@ -131,13 +83,13 @@ impl Common {
         loop {
             if let Some(data) = self.data_receiver.recv().await {
                 match data {
-                    ChannelData::Audio { timestamp, data } => {
+                    FrameData::Audio { timestamp, data } => {
                         self.send_audio(data, timestamp).await?;
                     }
-                    ChannelData::Video { timestamp, data } => {
+                    FrameData::Video { timestamp, data } => {
                         self.send_video(data, timestamp).await?;
                     }
-                    ChannelData::MetaData { timestamp, data } => {
+                    FrameData::MetaData { timestamp, data } => {
                         self.send_metadata(data, timestamp).await?;
                     }
                 }
@@ -213,7 +165,7 @@ impl Common {
         data: &mut BytesMut,
         timestamp: &u32,
     ) -> Result<(), SessionError> {
-        let channel_data = ChannelData::Video {
+        let channel_data = FrameData::Video {
             timestamp: *timestamp,
             data: data.clone(),
         };
@@ -223,7 +175,7 @@ impl Common {
             Err(err) => {
                 log::error!("send video err: {}", err);
                 return Err(SessionError {
-                    value: SessionErrorValue::SendChannelDataErr,
+                    value: SessionErrorValue::SendFrameDataErr,
                 });
             }
         }
@@ -240,7 +192,7 @@ impl Common {
         data: &mut BytesMut,
         timestamp: &u32,
     ) -> Result<(), SessionError> {
-        let channel_data = ChannelData::Audio {
+        let channel_data = FrameData::Audio {
             timestamp: *timestamp,
             data: data.clone(),
         };
@@ -250,7 +202,7 @@ impl Common {
             Err(err) => {
                 log::error!("receive audio err {}\n", err);
                 return Err(SessionError {
-                    value: SessionErrorValue::SendChannelDataErr,
+                    value: SessionErrorValue::SendFrameDataErr,
                 });
             }
         }
@@ -267,7 +219,7 @@ impl Common {
         data: &mut BytesMut,
         timestamp: &u32,
     ) -> Result<(), SessionError> {
-        let channel_data = ChannelData::MetaData {
+        let channel_data = FrameData::MetaData {
             timestamp: *timestamp,
             data: data.clone(),
         };
@@ -276,7 +228,7 @@ impl Common {
             Ok(_) => {}
             Err(_) => {
                 return Err(SessionError {
-                    value: SessionErrorValue::SendChannelDataErr,
+                    value: SessionErrorValue::SendFrameDataErr,
                 })
             }
         }
@@ -327,22 +279,17 @@ impl Common {
             String::from("unknown")
         };
 
-        match self.session_type {
-            SessionType::Client => PublisherInfo {
-                id: sub_id,
-                sub_type: PublishType::SubscriberRtmp,
-                notify_info: NotifyInfo {
-                    request_url: self.request_url.clone(),
-                    remote_addr,
-                },
-            },
-            SessionType::Server => PublisherInfo {
-                id: sub_id,
-                sub_type: PublishType::PushRtmp,
-                notify_info: NotifyInfo {
-                    request_url: self.request_url.clone(),
-                    remote_addr,
-                },
+        let sub_type = match self.session_type {
+            SessionType::Client => PublishType::SubscriberRtmp,
+            SessionType::Server => PublishType::PushRtmp,
+        };
+
+        PublisherInfo {
+            id: sub_id,
+            sub_type,
+            notify_info: NotifyInfo {
+                request_url: self.request_url.clone(),
+                remote_addr,
             },
         }
     }
@@ -371,7 +318,7 @@ impl Common {
                 stream_name: stream_name.clone(),
             };
 
-            let subscribe_event = ChannelEvent::Subscribe {
+            let subscribe_event = StreamHubEvent::Subscribe {
                 identifier,
                 info: self.get_subscriber_info(sub_id),
                 sender,
@@ -380,7 +327,7 @@ impl Common {
 
             if rv.is_err() {
                 return Err(SessionError {
-                    value: SessionErrorValue::ChannelEventSendErr,
+                    value: SessionErrorValue::StreamHubEventSendErr,
                 });
             }
 
@@ -419,7 +366,7 @@ impl Common {
             stream_name,
         };
 
-        let subscribe_event = ChannelEvent::UnSubscribe {
+        let subscribe_event = StreamHubEvent::UnSubscribe {
             identifier,
             info: self.get_subscriber_info(sub_id),
         };
@@ -443,7 +390,7 @@ impl Common {
             .await;
 
         let (sender, receiver) = mpsc::unbounded_channel();
-        let publish_event = ChannelEvent::Publish {
+        let publish_event = StreamHubEvent::Publish {
             identifier: StreamIdentifier::Rtmp {
                 app_name,
                 stream_name,
@@ -456,7 +403,7 @@ impl Common {
         let rv = self.event_producer.send(publish_event);
         if rv.is_err() {
             return Err(SessionError {
-                value: SessionErrorValue::ChannelEventSendErr,
+                value: SessionErrorValue::StreamHubEventSendErr,
             });
         }
 
@@ -475,7 +422,7 @@ impl Common {
             app_name,
             stream_name
         );
-        let unpublish_event = ChannelEvent::UnPublish {
+        let unpublish_event = StreamHubEvent::UnPublish {
             identifier: StreamIdentifier::Rtmp {
                 app_name: app_name.clone(),
                 stream_name: stream_name.clone(),
@@ -492,7 +439,7 @@ impl Common {
                     stream_name
                 );
                 return Err(SessionError {
-                    value: SessionErrorValue::ChannelEventSendErr,
+                    value: SessionErrorValue::StreamHubEventSendErr,
                 });
             }
             _ => {
@@ -507,7 +454,7 @@ impl Common {
     }
 }
 
-pub struct StreamHandler {
+pub struct RtmpStreamHandler {
     /*cache is used to save RTMP sequence/gops/meta data
     which needs to be send to client(player) */
     /*The cache will be used in different threads(save
@@ -516,7 +463,7 @@ pub struct StreamHandler {
     pub cache: Mutex<Option<Cache>>,
 }
 
-impl StreamHandler {
+impl RtmpStreamHandler {
     pub fn new() -> Self {
         Self {
             cache: Mutex::new(None),
@@ -557,10 +504,10 @@ impl StreamHandler {
 }
 
 #[async_trait]
-impl TStreamHandler for StreamHandler {
+impl TStreamHandler for RtmpStreamHandler {
     async fn send_cache_data(
         &self,
-        sender: ChannelDataSender,
+        sender: FrameDataSender,
         sub_type: SubscribeType,
     ) -> Result<(), ChannelError> {
         if let Some(cache) = &mut *self.cache.lock().await {

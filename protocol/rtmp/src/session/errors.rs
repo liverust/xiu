@@ -55,14 +55,14 @@ pub enum SessionErrorValue {
     Amf0ValueCountNotCorrect,
     #[fail(display = "amf0 value type not correct error\n")]
     Amf0ValueTypeNotCorrect,
-    #[fail(display = "channel event send error\n")]
-    ChannelEventSendErr,
-    #[fail(display = "none channel data producer error\n")]
-    NoneChannelDataProducer,
-    #[fail(display = "none channel data consumer error\n")]
-    NoneChannelDataConsumer,
-    #[fail(display = "send channel data error\n")]
-    SendChannelDataErr,
+    #[fail(display = "stream hub event send error\n")]
+    StreamHubEventSendErr,
+    #[fail(display = "none frame data sender error\n")]
+    NoneFrameDataSender,
+    #[fail(display = "none frame data receiver error\n")]
+    NoneFrameDataReceiver,
+    #[fail(display = "send frame data error\n")]
+    SendFrameDataErr,
     #[fail(display = "subscribe count limit is reached.\n")]
     SubscribeCountLimitReach,
 

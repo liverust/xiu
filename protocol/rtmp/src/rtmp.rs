@@ -1,4 +1,4 @@
-use streamhub::define::ChannelEventProducer;
+use streamhub::define::StreamHubEventSender;
 
 use super::session::server_session;
 use std::net::SocketAddr;
@@ -7,12 +7,12 @@ use tokio::net::TcpListener;
 
 pub struct RtmpServer {
     address: String,
-    event_producer: ChannelEventProducer,
+    event_producer: StreamHubEventSender,
     gop_num: usize,
 }
 
 impl RtmpServer {
-    pub fn new(address: String, event_producer: ChannelEventProducer, gop_num: usize) -> Self {
+    pub fn new(address: String, event_producer: StreamHubEventSender, gop_num: usize) -> Self {
         Self {
             address,
             event_producer,

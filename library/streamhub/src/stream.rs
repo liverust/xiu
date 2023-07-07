@@ -12,7 +12,7 @@ pub enum StreamIdentifier {
         stream_name: String,
     },
     Rtsp {
-        stream_name: String,
+        stream_path: String,
     },
 }
 impl fmt::Display for StreamIdentifier {
@@ -28,7 +28,7 @@ impl fmt::Display for StreamIdentifier {
                     app_name, stream_name
                 )
             }
-            StreamIdentifier::Rtsp { stream_name } => {
+            StreamIdentifier::Rtsp { stream_path: stream_name } => {
                 write!(f, "RTSP - stream_name: {}", stream_name)
             }
             StreamIdentifier::Unkonwn => {

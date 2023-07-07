@@ -8,7 +8,7 @@ use {
     errors::CacheError,
     gop::Gop,
     std::collections::VecDeque,
-    streamhub::define::ChannelData,
+    streamhub::define::FrameData,
     streamhub::statistics::avstatistics::AvStatistics,
     streamhub::stream::StreamIdentifier,
     xflv::{define, demuxer_tag, mpeg4_aac::Mpeg4AacProcessor, mpeg4_avc::Mpeg4AvcProcessor},
@@ -59,10 +59,10 @@ impl Cache {
         self.metadata_timestamp = timestamp;
     }
 
-    pub fn get_metadata(&self) -> Option<ChannelData> {
+    pub fn get_metadata(&self) -> Option<FrameData> {
         let data = self.metadata.get_chunk_body();
         if !data.is_empty() {
-            Some(ChannelData::MetaData {
+            Some(FrameData::MetaData {
                 timestamp: self.metadata_timestamp,
                 data,
             })
@@ -76,7 +76,7 @@ impl Cache {
         chunk_body: &BytesMut,
         timestamp: u32,
     ) -> Result<(), CacheError> {
-        let channel_data = ChannelData::Audio {
+        let channel_data = FrameData::Audio {
             timestamp,
             data: chunk_body.clone(),
         };
@@ -107,9 +107,9 @@ impl Cache {
         Ok(())
     }
 
-    pub fn get_audio_seq(&self) -> Option<ChannelData> {
+    pub fn get_audio_seq(&self) -> Option<FrameData> {
         if !self.audio_seq.is_empty() {
-            return Some(ChannelData::Audio {
+            return Some(FrameData::Audio {
                 timestamp: self.audio_timestamp,
                 data: self.audio_seq.clone(),
             });
@@ -117,9 +117,9 @@ impl Cache {
         None
     }
 
-    pub fn get_video_seq(&self) -> Option<ChannelData> {
+    pub fn get_video_seq(&self) -> Option<FrameData> {
         if !self.video_seq.is_empty() {
-            return Some(ChannelData::Video {
+            return Some(FrameData::Video {
                 timestamp: self.video_timestamp,
                 data: self.video_seq.clone(),
             });
@@ -135,7 +135,7 @@ impl Cache {
         let mut parser = demuxer_tag::VideoTagHeaderDemuxer::new(chunk_body.clone());
         let tag = parser.parse_tag_header()?;
 
-        let channel_data = ChannelData::Video {
+        let channel_data = FrameData::Video {
             timestamp,
             data: chunk_body.clone(),
         };

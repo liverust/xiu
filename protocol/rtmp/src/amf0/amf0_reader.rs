@@ -19,7 +19,6 @@ impl Amf0Reader {
 
         loop {
             let result = self.read_any()?;
-
             match result {
                 Amf0ValueType::END => {
                     break;
@@ -29,7 +28,6 @@ impl Amf0Reader {
                 }
             }
         }
-
         Ok(results)
     }
     pub fn read_any(&mut self) -> Result<Amf0ValueType, Amf0ReadError> {
@@ -261,7 +259,7 @@ mod tests {
     fn bytes_to_i24(bytes: [u8; 3]) -> i32 {
         let sign_extend_mask = 0xff_ff << 23;
         let value = ((bytes[0] as i32) << 16) | ((bytes[1] as i32) << 8) | (bytes[2] as i32);
-        
+
         if value & (1 << 23) != 0 {
             // Sign extend the value
             (value | sign_extend_mask) as i32
@@ -286,7 +284,7 @@ mod tests {
             t = (t << 8) + time as u32;
         }
 
-        println!("number: {}",bytes_to_i24(data));
+        println!("number: {}", bytes_to_i24(data));
     }
 
     #[test]

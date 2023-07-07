@@ -7,7 +7,7 @@ use {
         Body, Request, Response, Server, StatusCode,
     },
     std::net::SocketAddr,
-    streamhub::define::ChannelEventProducer,
+    streamhub::define::StreamHubEventSender,
 };
 
 type GenericError = Box<dyn std::error::Error + Send + Sync>;
@@ -16,7 +16,7 @@ static NOTFOUND: &[u8] = b"Not Found";
 
 async fn handle_connection(
     req: Request<Body>,
-    event_producer: ChannelEventProducer, // event_producer: ChannelEventProducer
+    event_producer: StreamHubEventSender, // event_producer: ChannelEventProducer
     remote_addr: SocketAddr,
 ) -> Result<Response<Body>> {
     let path = req.uri().path();
@@ -60,7 +60,7 @@ async fn handle_connection(
     }
 }
 
-pub async fn run(event_producer: ChannelEventProducer, port: usize) -> Result<()> {
+pub async fn run(event_producer: StreamHubEventSender, port: usize) -> Result<()> {
     let listen_address = format!("0.0.0.0:{port}");
     let sock_addr = listen_address.parse().unwrap();
 

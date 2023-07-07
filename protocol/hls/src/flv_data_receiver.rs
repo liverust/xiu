@@ -8,8 +8,8 @@ use {
     rtmp::session::errors::{SessionError, SessionErrorValue},
     std::time::Duration,
     streamhub::define::{
-        ChannelData, ChannelDataReceiver, ChannelEvent, ChannelEventProducer, NotifyInfo,
-        SubscribeType, SubscriberInfo,
+        FrameData, FrameDataReceiver, StreamHubEventSender, NotifyInfo, StreamHubEvent, SubscribeType,
+        SubscriberInfo,
     },
     tokio::{
         sync::{mpsc, oneshot},
@@ -25,8 +25,8 @@ pub struct FlvDataReceiver {
     app_name: String,
     stream_name: String,
 
-    event_producer: ChannelEventProducer,
-    data_consumer: ChannelDataReceiver,
+    event_producer: StreamHubEventSender,
+    data_consumer: FrameDataReceiver,
     media_processor: Flv2HlsRemuxer,
     subscriber_id: Uuid,
 }
@@ -35,7 +35,7 @@ impl FlvDataReceiver {
     pub fn new(
         app_name: String,
         stream_name: String,
-        event_producer: ChannelEventProducer,
+        event_producer: StreamHubEventSender,
 
         duration: i64,
     ) -> Self {
@@ -67,8 +67,8 @@ impl FlvDataReceiver {
         loop {
             if let Some(data) = self.data_consumer.recv().await {
                 let flv_data: FlvData = match data {
-                    ChannelData::Audio { timestamp, data } => FlvData::Audio { timestamp, data },
-                    ChannelData::Video { timestamp, data } => FlvData::Video { timestamp, data },
+                    FrameData::Audio { timestamp, data } => FlvData::Audio { timestamp, data },
+                    FrameData::Video { timestamp, data } => FlvData::Video { timestamp, data },
                     _ => continue,
                 };
                 retry_count = 0;
@@ -118,7 +118,7 @@ impl FlvDataReceiver {
                 stream_name: stream_name.clone(),
             };
 
-            let subscribe_event = ChannelEvent::Subscribe {
+            let subscribe_event = StreamHubEvent::Subscribe {
                 identifier,
                 info: sub_info,
                 sender,
@@ -127,7 +127,7 @@ impl FlvDataReceiver {
             let rv = self.event_producer.send(subscribe_event);
             if rv.is_err() {
                 let session_error = SessionError {
-                    value: SessionErrorValue::SendChannelDataErr,
+                    value: SessionErrorValue::SendFrameDataErr,
                 };
                 return Err(HlsError {
                     value: HlsErrorValue::SessionError(session_error),
@@ -175,7 +175,7 @@ impl FlvDataReceiver {
             stream_name: self.stream_name.clone(),
         };
 
-        let subscribe_event = ChannelEvent::UnSubscribe {
+        let subscribe_event = StreamHubEvent::UnSubscribe {
             identifier,
             info: sub_info,
         };

@@ -1392,6 +1392,7 @@ dependencies = [
 name = "rtsp"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
  "byteorder",
  "bytes",
  "bytesio 0.2.0",
@@ -1403,6 +1404,7 @@ dependencies = [
  "lazy_static",
  "log",
  "rand 0.3.23",
+ "streamhub",
  "tokio",
  "uuid 0.6.5",
 ]

@@ -21,6 +21,8 @@ use http::StatusCode;
 
 use super::http::parser::RtspRequest;
 use super::sdp::Sdp;
+use async_trait::async_trait;
+use bytesio::bytesio::BytesIO;
 use define::rtsp_method_name;
 use httparse::Request;
 use httparse::Response;
@@ -28,16 +30,30 @@ use indexmap::indexmap;
 use indexmap::IndexMap;
 use std::collections::HashMap;
 use std::sync::Arc;
+
+use streamhub::{
+    define::{
+        FrameData, FrameDataReceiver, FrameDataSender, NotifyInfo, PubSubInfo, PublishType,
+        PublisherInfo, StreamHubEvent, StreamHubEventSender, SubscribeType, SubscriberInfo,
+        TStreamHandler,
+    },
+    errors::{ChannelError, ChannelErrorValue},
+    statistics::StreamStatistics,
+    stream::StreamIdentifier,
+};
+use tokio::net::TcpStream;
 use tokio::sync::Mutex;
 
 pub struct RtspServerSession {
+    io: Arc<Mutex<BytesIO>>,
     reader: BytesReader,
     writer: AsyncBytesWriter,
-    bytesio_data: BytesMut,
     transport: RtspTransport,
     tracks: HashMap<TrackType, RtspTrack>,
     sdp: Sdp,
     pub session_id: String,
+    event_producer: StreamHubEventSender,
+    stream_handler: Arc<RtspStreamHandler>,
 }
 
 pub struct InterleavedBinaryData {
@@ -67,8 +83,34 @@ impl InterleavedBinaryData {
 }
 
 impl RtspServerSession {
-    async fn run(&mut self) -> Result<(), SessionError> {
+    pub fn new(stream: TcpStream, event_producer: StreamHubEventSender) -> Self {
+        let remote_addr = if let Ok(addr) = stream.peer_addr() {
+            log::info!("server session: {}", addr.to_string());
+            Some(addr)
+        } else {
+            None
+        };
+
+        let io = Arc::new(Mutex::new(BytesIO::new(stream)));
+
+        Self {
+            io: io.clone(),
+            reader: BytesReader::new(BytesMut::default()),
+            writer: AsyncBytesWriter::new(io),
+            transport: RtspTransport::default(),
+            tracks: HashMap::new(),
+            sdp: Sdp::default(),
+            session_id: String::default(),
+            event_producer,
+            stream_handler: Arc::new(RtspStreamHandler::new()),
+        }
+    }
+
+    pub async fn run(&mut self) -> Result<(), SessionError> {
         loop {
+            let data = self.io.lock().await.read().await?;
+            self.reader.extend_from_slice(&data[..]);
+
             if let Ok(data) = InterleavedBinaryData::new(&mut self.reader) {
                 match data {
                     Some(a) => {
@@ -180,6 +222,16 @@ impl RtspServerSession {
                             _ => {}
                         }
                     }
+
+                    let (sender, receiver) = mpsc::unbounded_channel();
+                    let publish_event = StreamHubEvent::Publish {
+                        identifier: StreamIdentifier::Rtsp {
+                            stream_path: rtsp_request.path,
+                        },
+                        receiver,
+                        info: self.get_publisher_info(pub_id),
+                        stream_handler: self.stream_handler.clone(),
+                    };
                 }
                 rtsp_method_name::SETUP => {
                     let status_code = http::StatusCode::OK;
@@ -245,5 +297,27 @@ impl RtspServerSession {
 
         Ok(())
         //response.
+    }
+}
+
+pub struct RtspStreamHandler {}
+
+impl RtspStreamHandler {
+    pub fn new() -> Self {
+        Self {}
+    }
+}
+
+#[async_trait]
+impl TStreamHandler for RtspStreamHandler {
+    async fn send_cache_data(
+        &self,
+        sender: FrameDataSender,
+        sub_type: SubscribeType,
+    ) -> Result<(), ChannelError> {
+        Ok(())
+    }
+    async fn get_statistic_data(&self) -> Option<StreamStatistics> {
+        None
     }
 }

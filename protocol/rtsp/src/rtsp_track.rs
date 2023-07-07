@@ -10,11 +10,13 @@ use super::rtp::rtp_h264::RtpH264UnPacker;
 use super::rtp::rtp_h265::RtpH265UnPacker;
 
 use super::rtp::rtcp::rtcp_context::RtcpContext;
+use super::rtp::rtcp::rtcp_sr::RtcpSenderReport;
 use super::rtp::utils::TPacker;
 use super::rtp::utils::TUnPacker;
 use super::rtsp_codec::RtspCodecId;
 use super::rtsp_codec::RtspCodecInfo;
 use super::rtsp_transport::RtspTransport;
+use crate::rtp::utils::Marshal;
 use crate::rtp::utils::Unmarshal;
 use bytes::BytesMut;
 use bytesio::bytes_reader::BytesReader;
@@ -67,13 +69,24 @@ impl RtspTrack {
         }
     }
 
-    pub fn on_rtcp(&self, reader: &mut BytesReader) {
-        if let Ok(rtcp_header) = RtcpHeader::unmarshal(reader) {
+    pub fn on_rtcp(&mut self, reader: &mut BytesReader) {
+        let mut reader_clone = BytesReader::new(reader.get_remaining_bytes());
+        if let Ok(rtcp_header) = RtcpHeader::unmarshal(&mut reader_clone) {
             match rtcp_header.payload_type {
-                RTCP_SR => {}
+                RTCP_SR => {
+                    if let Ok(sr) = RtcpSenderReport::unmarshal(reader) {
+                        self.recv_ctx.received_sr(&sr);
+                        self.send_rtcp_receier_report();
+                    }
+                }
                 _ => {}
             }
         }
+    }
+
+    pub fn send_rtcp_receier_report(&mut self) {
+        let rr = self.recv_ctx.generate_rr();
+        let data = rr.marshal();
     }
 }
 

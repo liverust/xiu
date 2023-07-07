@@ -92,17 +92,17 @@ impl Serialize for PublisherInfo {
 }
 
 #[derive(Clone)]
-pub enum ChannelData {
+pub enum FrameData {
     Video { timestamp: u32, data: BytesMut },
     Audio { timestamp: u32, data: BytesMut },
     MetaData { timestamp: u32, data: BytesMut },
 }
 
-pub type ChannelDataSender = mpsc::UnboundedSender<ChannelData>;
-pub type ChannelDataReceiver = mpsc::UnboundedReceiver<ChannelData>;
+pub type FrameDataSender = mpsc::UnboundedSender<FrameData>;
+pub type FrameDataReceiver = mpsc::UnboundedReceiver<FrameData>;
 
-pub type ChannelEventProducer = mpsc::UnboundedSender<ChannelEvent>;
-pub type ChannelEventConsumer = mpsc::UnboundedReceiver<ChannelEvent>;
+pub type StreamHubEventSender = mpsc::UnboundedSender<StreamHubEvent>;
+pub type StreamHubEventReceiver = mpsc::UnboundedReceiver<StreamHubEvent>;
 
 pub type ClientEventProducer = broadcast::Sender<ClientEvent>;
 pub type ClientEventConsumer = broadcast::Receiver<ClientEvent>;
@@ -120,19 +120,19 @@ pub type StreamStatisticSizeReceiver = oneshot::Sender<usize>;
 pub trait TStreamHandler: Send + Sync {
     async fn send_cache_data(
         &self,
-        sender: ChannelDataSender,
+        sender: FrameDataSender,
         sub_type: SubscribeType,
     ) -> Result<(), ChannelError>;
     async fn get_statistic_data(&self) -> Option<StreamStatistics>;
 }
 
 #[derive(Serialize)]
-pub enum ChannelEvent {
+pub enum StreamHubEvent {
     Subscribe {
         identifier: StreamIdentifier,
         info: SubscriberInfo,
         #[serde(skip_serializing)]
-        sender: ChannelDataSender,
+        sender: FrameDataSender,
     },
     UnSubscribe {
         identifier: StreamIdentifier,
@@ -142,7 +142,7 @@ pub enum ChannelEvent {
         identifier: StreamIdentifier,
         info: PublisherInfo,
         #[serde(skip_serializing)]
-        receiver: ChannelDataReceiver,
+        receiver: FrameDataReceiver,
         #[serde(skip_serializing)]
         stream_handler: Arc<dyn TStreamHandler>,
     },
@@ -162,7 +162,7 @@ pub enum ChannelEvent {
 #[derive(Debug)]
 pub enum TransmitterEvent {
     Subscribe {
-        sender: ChannelDataSender,
+        sender: FrameDataSender,
         info: SubscriberInfo,
     },
     UnSubscribe {

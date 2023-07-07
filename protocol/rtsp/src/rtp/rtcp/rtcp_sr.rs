@@ -49,23 +49,21 @@ use bytesio::bytes_writer::BytesWriter;
 #[derive(Debug, Clone, Default)]
 pub struct RtcpSenderReport {
     pub header: RtcpHeader,
-    ssrc: u32,
-    ntp: u64,
+    pub ssrc: u32,
+    pub ntp: u64,
     rtp_timestamp: u32,
     sender_packet_count: u32,
     sender_octet_count: u32,
     pub report_blocks: Vec<ReportBlock>,
 }
 
-impl Unmarshal<BytesMut, Result<Self, RtcpError>> for RtcpSenderReport {
-    fn unmarshal(data: BytesMut) -> Result<Self, RtcpError>
+impl Unmarshal<&mut BytesReader, Result<Self, RtcpError>> for RtcpSenderReport {
+    fn unmarshal(reader: &mut BytesReader) -> Result<Self, RtcpError>
     where
         Self: Sized,
     {
-        let mut reader = BytesReader::new(data);
-
         let mut sender_report = RtcpSenderReport::default();
-        sender_report.header = RtcpHeader::unmarshal(&mut reader)?;
+        sender_report.header = RtcpHeader::unmarshal(reader)?;
 
         sender_report.ssrc = reader.read_u32::<BigEndian>()?;
         sender_report.ntp = reader.read_u64::<BigEndian>()?;
@@ -74,7 +72,7 @@ impl Unmarshal<BytesMut, Result<Self, RtcpError>> for RtcpSenderReport {
         sender_report.sender_octet_count = reader.read_u32::<BigEndian>()?;
 
         for _ in 0..sender_report.header.report_count {
-            let report_block = ReportBlock::unmarshal(&mut reader)?;
+            let report_block = ReportBlock::unmarshal(reader)?;
             sender_report.report_blocks.push(report_block);
         }
 
