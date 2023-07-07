@@ -280,7 +280,7 @@ impl Common {
         };
 
         let sub_type = match self.session_type {
-            SessionType::Client => PublishType::SubscriberRtmp,
+            SessionType::Client => PublishType::RelayRtmp,
             SessionType::Server => PublishType::PushRtmp,
         };
 
@@ -541,7 +541,7 @@ impl TStreamHandler for RtmpStreamHandler {
                         }
                     }
                 }
-                SubscribeType::PublisherRtmp => {}
+                _ => {}
             }
         }
 

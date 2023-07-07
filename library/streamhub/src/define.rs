@@ -25,6 +25,8 @@ pub enum SubscribeType {
     PlayerHttpFlv,
     /* Remote client request playing hls stream.*/
     PlayerHls,
+    /* Remote client request playing rtsp stream.*/
+    PlayerRtsp,
     GenerateHls,
     /* Local client *subscribe* from local rtmp session
     and *publish* (relay push) the stream to remote server.*/
@@ -38,7 +40,10 @@ pub enum PublishType {
     PushRtmp,
     /* Local client *publish* the rtmp stream to local session,
     the rtmp stream is *subscribed* (pull) from remote server.*/
-    SubscriberRtmp,
+    RelayRtmp,
+    /* Receive rtsp stream from remote push client */
+    PushRtsp,
+    RelayRtsp,
 }
 
 #[derive(Debug, Serialize, Clone)]

@@ -21,6 +21,8 @@ pub enum SessionErrorValue {
     BytesWriteError(#[cause] BytesWriteError),
     #[fail(display = "Utf8Error: {}\n", _0)]
     Utf8Error(#[cause] Utf8Error),
+    #[fail(display = "stream hub event send error\n")]
+    StreamHubEventSendErr,
 }
 
 impl From<BytesIOError> for SessionError {

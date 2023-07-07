@@ -17,10 +17,12 @@ use bytesio::bytes_reader::BytesReader;
 use bytesio::bytes_writer::AsyncBytesWriter;
 use chrono::format::InternalFixed;
 use errors::SessionError;
+use errors::SessionErrorValue;
 use http::StatusCode;
 
 use super::http::parser::RtspRequest;
 use super::sdp::Sdp;
+use super::session::define::SessionType;
 use async_trait::async_trait;
 use bytesio::bytesio::BytesIO;
 use define::rtsp_method_name;
@@ -29,7 +31,10 @@ use httparse::Response;
 use indexmap::indexmap;
 use indexmap::IndexMap;
 use std::collections::HashMap;
+use std::str::FromStr;
 use std::sync::Arc;
+use tokio::sync::{mpsc, oneshot};
+use uuid::Uuid;
 
 use streamhub::{
     define::{
@@ -48,12 +53,15 @@ pub struct RtspServerSession {
     io: Arc<Mutex<BytesIO>>,
     reader: BytesReader,
     writer: AsyncBytesWriter,
+
     transport: RtspTransport,
     tracks: HashMap<TrackType, RtspTrack>,
     sdp: Sdp,
     pub session_id: String,
-    event_producer: StreamHubEventSender,
     stream_handler: Arc<RtspStreamHandler>,
+
+    event_producer: StreamHubEventSender,
+    data_sender: FrameDataSender,
 }
 
 pub struct InterleavedBinaryData {
@@ -93,6 +101,8 @@ impl RtspServerSession {
 
         let io = Arc::new(Mutex::new(BytesIO::new(stream)));
 
+        let (init_sender, init_receiver) = mpsc::unbounded_channel();
+
         Self {
             io: io.clone(),
             reader: BytesReader::new(BytesMut::default()),
@@ -103,6 +113,7 @@ impl RtspServerSession {
             session_id: String::default(),
             event_producer,
             stream_handler: Arc::new(RtspStreamHandler::new()),
+            data_sender: init_sender,
         }
     }
 
@@ -229,9 +240,18 @@ impl RtspServerSession {
                             stream_path: rtsp_request.path,
                         },
                         receiver,
-                        info: self.get_publisher_info(pub_id),
+                        info: self.get_publisher_info(),
                         stream_handler: self.stream_handler.clone(),
                     };
+
+                    let rv = self.event_producer.send(publish_event);
+                    if rv.is_err() {
+                        return Err(SessionError {
+                            value: SessionErrorValue::StreamHubEventSendErr,
+                        });
+                    }
+
+                    self.data_sender = sender;
                 }
                 rtsp_method_name::SETUP => {
                     let status_code = http::StatusCode::OK;
@@ -277,6 +297,23 @@ impl RtspServerSession {
         }
 
         Ok(())
+    }
+
+    fn get_publisher_info(&mut self) -> PublisherInfo {
+        let id = if let Ok(uuid) = Uuid::from_str(&self.session_id) {
+            uuid
+        } else {
+            Uuid::from_str("unknown").unwrap()
+        };
+
+        PublisherInfo {
+            id,
+            sub_type: PublishType::PushRtsp,
+            notify_info: NotifyInfo {
+                request_url: String::from(""),
+                remote_addr: String::from(""),
+            },
+        }
     }
 
     fn on_rtp_over_rtsp_message(&mut self, interleaved_binary_data: InterleavedBinaryData) {
