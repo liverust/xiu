@@ -3,6 +3,7 @@ use super::errors::PackerError;
 use super::errors::UnPackerError;
 use bytesio::bytes_reader::BytesReader;
 use std::time::{SystemTime, UNIX_EPOCH};
+use streamhub::define::FrameData;
 
 use bytes::{BufMut, BytesMut};
 
@@ -23,8 +24,11 @@ pub trait TRtpPacker: TPacker {
     fn pack_nalu(&mut self, nalu: BytesMut) -> Result<(), PackerError>;
 }
 
+pub type OnFrameFn = Box<dyn Fn(FrameData) -> Result<(), UnPackerError> + Send>;
+
 pub trait TUnPacker: Send {
     fn unpack(&mut self, reader: &mut BytesReader) -> Result<(), UnPackerError>;
+    fn on_frame_handler(&mut self, f: OnFrameFn);
 }
 
 pub(super) fn is_fu_start(fu_header: u8) -> bool {

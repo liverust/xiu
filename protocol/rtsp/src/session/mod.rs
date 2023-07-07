@@ -21,6 +21,7 @@ use errors::SessionErrorValue;
 use http::StatusCode;
 
 use super::http::parser::RtspRequest;
+use super::rtp::errors::UnPackerError;
 use super::sdp::Sdp;
 use super::session::define::SessionType;
 use async_trait::async_trait;
@@ -189,8 +190,6 @@ impl RtspServerSession {
                     }
 
                     for media in &self.sdp.medias {
-                        let media_name = &media.media_type;
-
                         let media_control =
                             if let Some(media_control_val) = media.attributes.get("control") {
                                 media_control_val.clone()
@@ -198,6 +197,7 @@ impl RtspServerSession {
                                 String::from("")
                             };
 
+                        let media_name = &media.media_type;
                         match media_name.as_str() {
                             "audio" => {
                                 let codec_id = rtsp_codec::RTSP_CODEC_NAME_2_ID
@@ -213,6 +213,7 @@ impl RtspServerSession {
 
                                 let track =
                                     RtspTrack::new(TrackType::Audio, codec_info, media_control);
+
                                 self.tracks.insert(TrackType::Audio, track);
                             }
                             "video" => {
@@ -234,7 +235,24 @@ impl RtspServerSession {
                         }
                     }
 
+                    // The sender is used for sending audio/video frame data to stream hub
+                    // receiver is used to passing to stream hub and receive the a/v frame data
                     let (sender, receiver) = mpsc::unbounded_channel();
+
+                    for (_, track) in &mut self.tracks {
+                        if let Some(unpacker) = &mut track.rtp_unpacker {
+                            let sender_out = sender.clone();
+                            unpacker.on_frame_handler(Box::new(
+                                move |msg: FrameData| -> Result<(), UnPackerError> {
+                                    if let Err(err) = sender_out.send(msg) {
+                                        log::error!("send frame error: {}", err);
+                                    }
+                                    Ok(())
+                                },
+                            ));
+                        }
+                    }
+
                     let publish_event = StreamHubEvent::Publish {
                         identifier: StreamIdentifier::Rtsp {
                             stream_path: rtsp_request.path,

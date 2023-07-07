@@ -5,6 +5,7 @@ use super::errors::PackerError;
 use super::errors::UnPackerError;
 use super::utils;
 use super::utils::Marshal;
+use super::utils::OnFrameFn;
 use super::utils::TPacker;
 use super::utils::TRtpPacker;
 use super::utils::TUnPacker;
@@ -16,6 +17,7 @@ use bytes::{BufMut, BytesMut};
 use bytesio::bytes_errors::BytesReadError;
 use bytesio::bytes_reader::BytesReader;
 use bytesio::bytes_writer::BytesWriter;
+use streamhub::define::FrameData;
 
 pub type OnPacketFn = fn(BytesMut) -> Result<(), PackerError>;
 
@@ -62,8 +64,7 @@ impl TPacker for RtpAacPacker {
     }
 }
 
-pub type OnFrameFn = fn(BytesMut) -> Result<(), PackerError>;
-#[derive(Debug, Clone, Default)]
+#[derive(Default)]
 pub struct RtpAacUnPacker {
     sequence_number: u16,
     timestamp: u32,
@@ -108,11 +109,17 @@ impl TUnPacker for RtpAacUnPacker {
 
         for au_length in au_lengths {
             let au_data = reader.read_bytes(au_length)?;
-            if let Some(f) = self.on_frame_handler {
-                f(au_data);
+            if let Some(f) = &self.on_frame_handler {
+                f(FrameData::Video {
+                    timestamp: self.timestamp,
+                    data: au_data,
+                });
             }
         }
 
         Ok(())
+    }
+    fn on_frame_handler(&mut self, f: OnFrameFn) {
+        self.on_frame_handler = Some(f);
     }
 }

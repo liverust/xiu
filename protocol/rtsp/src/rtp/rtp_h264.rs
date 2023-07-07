@@ -3,6 +3,7 @@ use super::errors::PackerError;
 use super::errors::UnPackerError;
 use super::utils;
 use super::utils::Marshal;
+use super::utils::OnFrameFn;
 use super::utils::TPacker;
 use super::utils::TRtpPacker;
 use super::utils::TUnPacker;
@@ -14,6 +15,7 @@ use bytes::{BufMut, BytesMut};
 use bytesio::bytes_errors::BytesReadError;
 use bytesio::bytes_reader::BytesReader;
 use bytesio::bytes_writer::BytesWriter;
+use streamhub::define::FrameData;
 
 pub type OnPacketFn = fn(BytesMut) -> Result<(), PackerError>;
 
@@ -110,8 +112,7 @@ impl TRtpPacker for RtpH264Packer {
     }
 }
 
-pub type OnFrameFn = fn(BytesMut) -> Result<(), UnPackerError>;
-#[derive(Debug, Clone, Default)]
+#[derive(Default)]
 pub struct RtpH264UnPacker {
     sequence_number: u16,
     timestamp: u32,
@@ -147,6 +148,10 @@ impl TUnPacker for RtpH264UnPacker {
 
         Ok(())
     }
+
+    fn on_frame_handler(&mut self, f: OnFrameFn) {
+        self.on_frame_handler = Some(f);
+    }
 }
 
 impl RtpH264UnPacker {
@@ -156,11 +161,14 @@ impl RtpH264UnPacker {
 
     fn unpack_single(
         &mut self,
-        rtp_payload: BytesMut,
+        payload: BytesMut,
         t: define::RtpNalType,
     ) -> Result<(), UnPackerError> {
-        if let Some(f) = self.on_frame_handler {
-            f(rtp_payload);
+        if let Some(f) = &self.on_frame_handler {
+            f(FrameData::Video {
+                timestamp: self.timestamp,
+                data: payload,
+            });
         }
         return Ok(());
     }
@@ -227,12 +235,15 @@ impl RtpH264UnPacker {
         self.fu_buffer.put(payload_reader.extract_remaining_bytes());
 
         if utils::is_fu_end(fu_header) {
-            let mut frame = BytesMut::new();
-            frame.extend_from_slice(&define::ANNEXB_NALU_START_CODE);
-            frame.put(self.fu_buffer.clone());
+            let mut payload = BytesMut::new();
+            payload.extend_from_slice(&define::ANNEXB_NALU_START_CODE);
+            payload.put(self.fu_buffer.clone());
             self.fu_buffer.clear();
-            if let Some(f) = self.on_frame_handler {
-                f(frame)?;
+            if let Some(f) = &self.on_frame_handler {
+                f(FrameData::Video {
+                    timestamp: self.timestamp,
+                    data: payload,
+                })?;
             }
         }
 
@@ -300,11 +311,14 @@ impl RtpH264UnPacker {
             let length = payload_reader.read_u16::<BigEndian>()? as usize;
             let nalu = payload_reader.read_bytes(length)?;
 
-            let mut frame = BytesMut::new();
-            frame.extend_from_slice(&define::ANNEXB_NALU_START_CODE);
-            frame.put(nalu);
-            if let Some(f) = self.on_frame_handler {
-                f(frame)?;
+            let mut payload = BytesMut::new();
+            payload.extend_from_slice(&define::ANNEXB_NALU_START_CODE);
+            payload.put(nalu);
+            if let Some(f) = &self.on_frame_handler {
+                f(FrameData::Video {
+                    timestamp: self.timestamp,
+                    data: payload,
+                })?;
             }
         }
         Ok(())
@@ -391,11 +405,14 @@ impl RtpH264UnPacker {
             assert!(ts != 0);
             let nalu = payload_reader.read_bytes(nalu_size - ts_bytes - 1)?;
 
-            let mut frame = BytesMut::new();
-            frame.extend_from_slice(&define::ANNEXB_NALU_START_CODE);
-            frame.put(nalu);
-            if let Some(f) = self.on_frame_handler {
-                f(frame)?;
+            let mut payload = BytesMut::new();
+            payload.extend_from_slice(&define::ANNEXB_NALU_START_CODE);
+            payload.put(nalu);
+            if let Some(f) = &self.on_frame_handler {
+                f(FrameData::Video {
+                    timestamp: self.timestamp,
+                    data: payload,
+                })?;
             }
         }
 
