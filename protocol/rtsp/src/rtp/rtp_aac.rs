@@ -1,23 +1,21 @@
-use std::fmt::Debug;
-
-use super::define;
 use super::errors::PackerError;
 use super::errors::UnPackerError;
-use super::utils;
+
 use super::utils::Marshal;
 use super::utils::OnFrameFn;
 use super::utils::OnPacketFn;
 use super::utils::TPacker;
-use super::utils::TRtpPacker;
+
 use super::utils::TUnPacker;
 use super::utils::Unmarshal;
 use super::RtpHeader;
 use super::RtpPacket;
+use async_trait::async_trait;
 use byteorder::BigEndian;
 use bytes::{BufMut, BytesMut};
-use bytesio::bytes_errors::BytesReadError;
+
 use bytesio::bytes_reader::BytesReader;
-use bytesio::bytes_writer::BytesWriter;
+
 use streamhub::define::FrameData;
 
 // pub type OnPacketFn = fn(BytesMut) -> Result<(), PackerError>;
@@ -43,9 +41,9 @@ impl RtpAacPacker {
         }
     }
 }
-
+#[async_trait]
 impl TPacker for RtpAacPacker {
-    fn pack(&mut self, data: &mut BytesMut, timestamp: u32) -> Result<(), PackerError> {
+    async fn pack(&mut self, data: &mut BytesMut, timestamp: u32) -> Result<(), PackerError> {
         self.header.timestamp = timestamp;
 
         let data_len = data.len();
@@ -57,7 +55,7 @@ impl TPacker for RtpAacPacker {
 
         let packet_data = packet.marshal()?;
         if let Some(f) = &self.on_packet_handler {
-            f(packet_data)?;
+            f(packet_data).await;
         }
 
         self.header.seq_number += 1;

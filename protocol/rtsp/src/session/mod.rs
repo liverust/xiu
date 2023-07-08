@@ -5,6 +5,7 @@ use crate::http::parser::RtspResponse;
 
 use super::rtsp_codec;
 use crate::global_trait::Unmarshal;
+
 use crate::rtsp_codec::RtspCodecInfo;
 use crate::rtsp_track::RtspTrack;
 use crate::rtsp_track::TrackType;
@@ -15,7 +16,7 @@ use byteorder::BigEndian;
 use bytes::BytesMut;
 use bytesio::bytes_reader::BytesReader;
 use bytesio::bytes_writer::AsyncBytesWriter;
-use chrono::format::InternalFixed;
+
 use errors::SessionError;
 use errors::SessionErrorValue;
 use http::StatusCode;
@@ -23,27 +24,23 @@ use http::StatusCode;
 use super::http::parser::RtspRequest;
 use super::rtp::errors::UnPackerError;
 use super::sdp::Sdp;
-use super::session::define::SessionType;
+
 use async_trait::async_trait;
 use bytesio::bytesio::BytesIO;
 use define::rtsp_method_name;
-use httparse::Request;
-use httparse::Response;
-use indexmap::indexmap;
-use indexmap::IndexMap;
+
 use std::collections::HashMap;
 use std::str::FromStr;
 use std::sync::Arc;
-use tokio::sync::{mpsc, oneshot};
+use tokio::sync::mpsc;
 use uuid::Uuid;
 
 use streamhub::{
     define::{
-        FrameData, FrameDataReceiver, FrameDataSender, NotifyInfo, PubSubInfo, PublishType,
-        PublisherInfo, StreamHubEvent, StreamHubEventSender, SubscribeType, SubscriberInfo,
-        TStreamHandler,
+        FrameData, FrameDataSender, NotifyInfo, PublishType, PublisherInfo, StreamHubEvent,
+        StreamHubEventSender, SubscribeType, SubscriberInfo, TStreamHandler,
     },
-    errors::{ChannelError, ChannelErrorValue},
+    errors::ChannelError,
     statistics::StreamStatistics,
     stream::StreamIdentifier,
 };
@@ -326,19 +323,22 @@ impl RtspServerSession {
                     // The sender is used for sending audio/video frame data to stream hub
                     // receiver is used to passing to stream hub and receive the a/v frame data
                     let (sender, mut receiver) = mpsc::unbounded_channel();
-                    // for (_, track) in &mut self.tracks {
-                    //     if let Some(unpacker) = &mut track.rtp_unpacker {
-                    //         let sender_out = sender.clone();
-                    //         unpacker.on_frame_handler(Box::new(
-                    //             move |msg: FrameData| -> Result<(), UnPackerError> {
-                    //                 if let Err(err) = sender_out.send(msg) {
-                    //                     log::error!("send frame error: {}", err);
-                    //                 }
-                    //                 Ok(())
-                    //             },
-                    //         ));
-                    //     }
-                    // }
+
+                    for (_, track) in &mut self.tracks {
+                        if let Some(packer) = &mut track.rtp_packer {
+                            let io_out = Arc::clone(&self.io);
+                            packer.on_packet_handler(Box::new(move |msg: BytesMut| {
+                                let io_in = io_out.clone();
+                                Box::pin(async move {
+                                    let mut writer = AsyncBytesWriter::new(io_in);
+                                    writer.write(&msg)?;
+                                    writer.flush().await?;
+
+                                    Ok(())
+                                })
+                            }));
+                        }
+                    }
 
                     let publish_event = StreamHubEvent::Subscribe {
                         identifier: StreamIdentifier::Rtsp {
@@ -365,7 +365,7 @@ impl RtspServerSession {
                                         self.tracks.get_mut(&TrackType::Audio)
                                     {
                                         if let Some(packer) = &mut audio_track.rtp_packer {
-                                            packer.pack(&mut data, timestamp);
+                                            packer.pack(&mut data, timestamp).await?;
                                         }
                                     }
                                 }
@@ -377,7 +377,7 @@ impl RtspServerSession {
                                         self.tracks.get_mut(&TrackType::Video)
                                     {
                                         if let Some(packer) = &mut video_track.rtp_packer {
-                                            packer.pack(&mut data, timestamp);
+                                            packer.pack(&mut data, timestamp).await?;
                                         }
                                     }
                                 }

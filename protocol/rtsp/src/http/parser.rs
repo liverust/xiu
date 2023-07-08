@@ -1,11 +1,6 @@
-use http::Request;
-use http::StatusCode;
-use indexmap::IndexMap;
-use std::io::{Read, Result};
-use std::net::TcpStream;
-
 use crate::global_trait::Marshal;
 use crate::global_trait::Unmarshal;
+use indexmap::IndexMap;
 
 #[derive(Debug, Clone, Default)]
 pub struct RtspRequest {

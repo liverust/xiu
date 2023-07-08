@@ -1,6 +1,5 @@
 use byteorder::BigEndian;
 use bytes::BytesMut;
-use bytesio::bits_reader::BitsReader;
 use bytesio::bytes_errors::BytesReadError;
 use bytesio::bytes_errors::BytesWriteError;
 use bytesio::bytes_reader::BytesReader;

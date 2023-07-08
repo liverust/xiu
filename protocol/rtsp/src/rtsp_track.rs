@@ -18,7 +18,6 @@ use super::rtsp_codec::RtspCodecInfo;
 use super::rtsp_transport::RtspTransport;
 use crate::rtp::utils::Marshal;
 use crate::rtp::utils::Unmarshal;
-use bytes::BytesMut;
 use bytesio::bytes_reader::BytesReader;
 
 trait Track {

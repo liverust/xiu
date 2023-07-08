@@ -134,6 +134,22 @@ pub struct PackerError {
     pub value: PackerErrorValue,
 }
 
+impl Fail for PackerError {
+    fn cause(&self) -> Option<&dyn Fail> {
+        self.value.cause()
+    }
+
+    fn backtrace(&self) -> Option<&Backtrace> {
+        self.value.backtrace()
+    }
+}
+
+impl fmt::Display for PackerError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        fmt::Display::fmt(&self.value, f)
+    }
+}
+
 #[derive(Debug, Fail)]
 pub enum PackerErrorValue {
     #[fail(display = "bytes read error: {}\n", _0)]

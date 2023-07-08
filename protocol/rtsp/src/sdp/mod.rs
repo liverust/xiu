@@ -2,8 +2,6 @@ pub mod fmtp;
 pub mod rtpmap;
 
 use crate::global_trait::{Marshal, Unmarshal};
-
-use failure::Backtrace;
 use rtpmap::RtpMap;
 use std::collections::HashMap;
 

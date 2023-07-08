@@ -2,10 +2,7 @@ use super::errors::RtcpError;
 use crate::rtp::utils::Marshal;
 use crate::rtp::utils::Unmarshal;
 use byteorder::BigEndian;
-use bytes::{BufMut, BytesMut};
-use bytesio::bits_reader::BitsReader;
-use bytesio::bytes_errors::BytesReadError;
-use bytesio::bytes_errors::BytesWriteError;
+use bytes::BytesMut;
 use bytesio::bytes_reader::BytesReader;
 use bytesio::bytes_writer::BytesWriter;
 

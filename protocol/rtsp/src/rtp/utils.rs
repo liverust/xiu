@@ -1,11 +1,13 @@
 use super::define;
 use super::errors::PackerError;
 use super::errors::UnPackerError;
+use async_trait::async_trait;
+use bytes::BytesMut;
 use bytesio::bytes_reader::BytesReader;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::future::Future;
+use std::pin::Pin;
+use std::time::SystemTime;
 use streamhub::define::FrameData;
-
-use bytes::{BufMut, BytesMut};
 
 pub trait Unmarshal<T1, T2> {
     fn unmarshal(data: T1) -> T2
@@ -18,14 +20,34 @@ pub trait Marshal<T> {
 }
 
 pub type OnFrameFn = Box<dyn Fn(FrameData) -> Result<(), UnPackerError> + Send>;
-pub type OnPacketFn = Box<dyn Fn(BytesMut) -> Result<(), PackerError> + Send>; //fn(BytesMut) -> Result<(), PackerError>;
+// pub type OnFrameFn =
+//     Box<dyn Fn(FrameData) -> Pin<Box<dyn Future<Output = ()> + Send + 'static>> + Send + Sync>;
 
+// pub type OnResponderFeedbackFn = Box<
+//     dyn (FnMut(
+//             Box<dyn RtcpPacket + Send + Sync>,
+//         ) -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>)
+//         + Send
+//         + Sync,
+// >;
+
+//pub type OnPacketAsyncFn = Box<dyn Fn(BytesMut) -> futures::future::BoxFuture<'static, Result<(), Box<dyn std::error::Error + Send>>> + Send>;
+
+pub type OnPacketFn = Box<
+    dyn Fn(BytesMut) -> Pin<Box<dyn Future<Output = Result<(), PackerError>> + Send + 'static>>
+        + Send
+        + Sync,
+>; //fn(BytesMut) -> Result<(), PackerError>;
+
+#[async_trait]
 pub trait TPacker: Send {
-    fn pack(&mut self, nalus: &mut BytesMut, timestamp: u32) -> Result<(), PackerError>;
+    async fn pack(&mut self, nalus: &mut BytesMut, timestamp: u32) -> Result<(), PackerError>;
     fn on_packet_handler(&mut self, f: OnPacketFn);
 }
+
+#[async_trait]
 pub trait TRtpPacker: TPacker {
-    fn pack_nalu(&mut self, nalu: BytesMut) -> Result<(), PackerError>;
+    async fn pack_nalu(&mut self, nalu: BytesMut) -> Result<(), PackerError>;
 }
 pub trait TUnPacker: Send {
     fn unpack(&mut self, reader: &mut BytesReader) -> Result<(), UnPackerError>;
@@ -45,7 +67,7 @@ pub fn find_start_code(nalus: &[u8]) -> Option<usize> {
     nalus.windows(pattern.len()).position(|w| w == pattern)
 }
 
-pub fn split_annexb_and_process<T: TRtpPacker>(
+pub async fn split_annexb_and_process<T: TRtpPacker>(
     nalus: &mut BytesMut,
     packer: &mut T,
 ) -> Result<(), PackerError> {
@@ -67,7 +89,7 @@ pub fn split_annexb_and_process<T: TRtpPacker>(
                 };
 
             let nalu = nalu_with_start_code.split_off(first_pos + 3);
-            return packer.pack_nalu(nalu);
+            return packer.pack_nalu(nalu).await;
         } else {
             break;
         }

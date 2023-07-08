@@ -1,5 +1,3 @@
-use std::ptr::NonNull;
-
 use super::define;
 
 use super::errors::PackerError;
@@ -15,11 +13,10 @@ use super::utils::TUnPacker;
 use super::utils::Unmarshal;
 use super::RtpHeader;
 use super::RtpPacket;
+use async_trait::async_trait;
 use byteorder::BigEndian;
 use bytes::{BufMut, BytesMut};
-use bytesio::bytes_errors::BytesReadError;
 use bytesio::bytes_reader::BytesReader;
-use bytesio::bytes_writer::BytesWriter;
 use streamhub::define::FrameData;
 
 #[derive(Default)]
@@ -43,7 +40,7 @@ impl RtpH265Packer {
         }
     }
 
-    pub fn pack_fu(&mut self, nalu: BytesMut) -> Result<(), PackerError> {
+    pub async fn pack_fu(&mut self, nalu: BytesMut) -> Result<(), PackerError> {
         let mut nalu_reader = BytesReader::new(nalu);
         /* NALU header
         0               1
@@ -96,7 +93,7 @@ impl RtpH265Packer {
 
             let packet_bytesmut = packet.marshal()?;
             if let Some(f) = &self.on_packet_handler {
-                f(packet_bytesmut)?;
+                f(packet_bytesmut).await?;
             }
             left_nalu_bytes = nalu_reader.len();
             self.header.seq_number += 1;
@@ -104,7 +101,7 @@ impl RtpH265Packer {
 
         Ok(())
     }
-    pub fn pack_single(&mut self, nalu: BytesMut) -> Result<(), PackerError> {
+    pub async fn pack_single(&mut self, nalu: BytesMut) -> Result<(), PackerError> {
         let mut packet = RtpPacket::new(self.header.clone());
         packet.header.marker = 1;
         packet.payload.put(nalu);
@@ -113,16 +110,17 @@ impl RtpH265Packer {
         self.header.seq_number += 1;
 
         if let Some(f) = &self.on_packet_handler {
-            return f(packet_bytesmut);
+            return f(packet_bytesmut).await;
         }
         Ok(())
     }
 }
 
+#[async_trait]
 impl TPacker for RtpH265Packer {
-    fn pack(&mut self, nalus: &mut BytesMut, timestamp: u32) -> Result<(), PackerError> {
+    async fn pack(&mut self, nalus: &mut BytesMut, timestamp: u32) -> Result<(), PackerError> {
         self.header.timestamp = timestamp;
-        utils::split_annexb_and_process(nalus, self)?;
+        utils::split_annexb_and_process(nalus, self).await?;
         Ok(())
     }
     fn on_packet_handler(&mut self, f: OnPacketFn) {
@@ -130,12 +128,13 @@ impl TPacker for RtpH265Packer {
     }
 }
 
+#[async_trait]
 impl TRtpPacker for RtpH265Packer {
-    fn pack_nalu(&mut self, nalu: BytesMut) -> Result<(), PackerError> {
+    async fn pack_nalu(&mut self, nalu: BytesMut) -> Result<(), PackerError> {
         if nalu.len() + define::RTP_FIXED_HEADER_LEN <= self.mtu {
-            self.pack_single(nalu)?;
+            self.pack_single(nalu).await?;
         } else {
-            self.pack_fu(nalu)?;
+            self.pack_fu(nalu).await?;
         }
         Ok(())
     }

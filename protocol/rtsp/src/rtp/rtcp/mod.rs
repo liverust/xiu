@@ -1,5 +1,3 @@
-use bytes::BytesMut;
-
 pub mod errors;
 pub mod rtcp_app;
 pub mod rtcp_bye;

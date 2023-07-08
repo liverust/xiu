@@ -16,7 +16,6 @@ use bytesio::bytes_writer::BytesWriter;
 use rtp_header::RtpHeader;
 
 use self::utils::Marshal;
-use self::utils::TPacker;
 use self::utils::Unmarshal;
 
 #[derive(Debug, Clone, Default)]

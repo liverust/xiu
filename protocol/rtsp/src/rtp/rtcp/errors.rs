@@ -1,10 +1,6 @@
 use bytesio::bytes_errors::BytesReadError;
 use bytesio::bytes_errors::BytesWriteError;
-
-use {
-    failure::{Backtrace, Fail},
-    std::fmt,
-};
+use failure::Fail;
 
 #[derive(Debug)]
 pub struct RtcpError {

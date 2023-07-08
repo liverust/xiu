@@ -1,4 +1,3 @@
-use crate::sdp::rtpmap;
 use std::fmt;
 
 pub mod rtsp_method_name {
