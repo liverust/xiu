@@ -1,21 +1,17 @@
 use {
     super::errors::ChannelError,
     crate::statistics::StreamStatistics,
+    crate::stream::StreamIdentifier,
     async_trait::async_trait,
     bytes::BytesMut,
     serde::ser::SerializeStruct,
     serde::Serialize,
     serde::Serializer,
     std::fmt,
+    std::sync::Arc,
     tokio::sync::{broadcast, mpsc, oneshot},
     uuid::Uuid,
 };
-
-use std::future::Future;
-use std::pin::Pin;
-use std::sync::Arc;
-
-use crate::stream::StreamIdentifier;
 
 #[derive(Debug, Serialize, Clone, Eq, PartialEq)]
 pub enum SubscribeType {

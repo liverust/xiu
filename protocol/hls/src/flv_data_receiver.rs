@@ -1,5 +1,3 @@
-use streamhub::stream::StreamIdentifier;
-
 use {
     super::{
         errors::{HlsError, HlsErrorValue},
@@ -7,14 +5,14 @@ use {
     },
     rtmp::session::errors::{SessionError, SessionErrorValue},
     std::time::Duration,
-    streamhub::define::{
-        FrameData, FrameDataReceiver, StreamHubEventSender, NotifyInfo, StreamHubEvent, SubscribeType,
-        SubscriberInfo,
+    streamhub::{
+        define::{
+            FrameData, FrameDataReceiver, NotifyInfo, StreamHubEvent, StreamHubEventSender,
+            SubscribeType, SubscriberInfo,
+        },
+        stream::StreamIdentifier,
     },
-    tokio::{
-        sync::{mpsc, oneshot},
-        time::sleep,
-    },
+    tokio::{sync::mpsc, time::sleep},
     uuid::Uuid,
     xflv::define::FlvData,
 };
@@ -99,8 +97,6 @@ impl FlvDataReceiver {
         app_name: String,
         stream_name: String,
     ) -> Result<(), HlsError> {
-        let mut retry_count: u8 = 0;
-
         loop {
             let (sender, receiver) = mpsc::unbounded_channel();
             /*the sub info is only used to transfer from RTMP to HLS, but not for client player */
@@ -152,9 +148,6 @@ impl FlvDataReceiver {
             //         }
             //     }
             // }
-
-            sleep(Duration::from_millis(800)).await;
-            retry_count += 1;
         }
 
         Ok(())

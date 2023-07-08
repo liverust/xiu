@@ -239,22 +239,22 @@ mod tests {
         print!("test")
     }
 
-    fn uint32_to_int24(num: u32) -> i32 {
-        // 截取低24位
-        let mut result = num & 0xFFFFFF;
+    // fn uint32_to_int24(num: u32) -> i32 {
+    //     // 截取低24位
+    //     let mut result = num & 0xFFFFFF;
 
-        let mut result2: i32 = result as i32;
+    //     let mut result2: i32 = result as i32;
 
-        // 判断最高位是否为1
-        if (result & 0x800000) == 0x800000 {
-            // 获取补码表示
-            result = (result ^ 0xFFFFFF) + 1;
+    //     // 判断最高位是否为1
+    //     if (result & 0x800000) == 0x800000 {
+    //         // 获取补码表示
+    //         result = (result ^ 0xFFFFFF) + 1;
 
-            result2 = result as i32 * -1;
-        }
+    //         result2 = result as i32 * -1;
+    //     }
 
-        result2
-    }
+    //     result2
+    // }
 
     fn bytes_to_i24(bytes: [u8; 3]) -> i32 {
         let sign_extend_mask = 0xff_ff << 23;

@@ -1,6 +1,4 @@
-use serde::ser::SerializeStruct;
 use serde::Serialize;
-use serde::Serializer;
 use std::fmt;
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Default)]

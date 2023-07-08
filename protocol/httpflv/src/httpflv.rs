@@ -8,16 +8,13 @@ use {
         session::errors::{SessionError, SessionErrorValue},
     },
     bytes::BytesMut,
-    std::{net::SocketAddr, time::Duration},
+    std::net::SocketAddr,
     streamhub::define::{
-        FrameData, FrameDataReceiver, StreamHubEventSender, NotifyInfo, StreamHubEvent, SubscribeType,
-        SubscriberInfo,
+        FrameData, FrameDataReceiver, NotifyInfo, StreamHubEvent, StreamHubEventSender,
+        SubscribeType, SubscriberInfo,
     },
     streamhub::stream::StreamIdentifier,
-    tokio::{
-        sync::{mpsc, oneshot},
-        time::sleep,
-    },
+    tokio::sync::mpsc,
     uuid::Uuid,
     xflv::muxer::{FlvMuxer, HEADER_LENGTH},
 };
@@ -169,8 +166,6 @@ impl HttpFlv {
     }
 
     pub async fn subscribe_from_rtmp_channels(&mut self) -> Result<(), HttpFLvError> {
-        let mut retry_count: u8 = 0;
-
         loop {
             let (sender, receiver) = mpsc::unbounded_channel();
 
@@ -223,9 +218,6 @@ impl HttpFlv {
             //         }
             //     }
             // }
-
-            sleep(Duration::from_millis(800)).await;
-            retry_count += 1;
         }
 
         Ok(())

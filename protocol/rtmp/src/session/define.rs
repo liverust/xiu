@@ -1,5 +1,3 @@
-use serde::Serialize;
-use std::cmp::Eq;
 use std::fmt;
 
 pub const WINDOW_ACKNOWLEDGEMENT_SIZE: u32 = 4096;

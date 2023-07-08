@@ -1,5 +1,3 @@
-use serde::ser::SerializeStruct;
-
 use {
     super::{
         define::SessionType,
@@ -18,23 +16,18 @@ use {
     async_trait::async_trait,
     bytes::BytesMut,
     bytesio::bytesio::BytesIO,
-    serde::{Serialize, Serializer},
     std::fmt,
-    std::{net::SocketAddr, sync::Arc, time::Duration},
+    std::{net::SocketAddr, sync::Arc},
     streamhub::{
         define::{
-            FrameData, FrameDataReceiver, FrameDataSender, NotifyInfo, PubSubInfo, PublishType,
-            PublisherInfo, StreamHubEvent, StreamHubEventSender, SubscribeType, SubscriberInfo,
-            TStreamHandler,
+            FrameData, FrameDataReceiver, FrameDataSender, NotifyInfo, PublishType, PublisherInfo,
+            StreamHubEvent, StreamHubEventSender, SubscribeType, SubscriberInfo, TStreamHandler,
         },
         errors::{ChannelError, ChannelErrorValue},
         statistics::StreamStatistics,
         stream::StreamIdentifier,
     },
-    tokio::{
-        sync::{mpsc, oneshot, Mutex},
-        time::sleep,
-    },
+    tokio::sync::{mpsc, Mutex},
     uuid::Uuid,
 };
 
@@ -302,8 +295,6 @@ impl Common {
             sub_id
         );
 
-        let mut retry_count: u8 = 0;
-
         loop {
             let (sender, receiver) = mpsc::unbounded_channel();
 
@@ -341,9 +332,6 @@ impl Common {
             //         }
             //     }
             // }
-
-            sleep(Duration::from_millis(800)).await;
-            retry_count += 1;
         }
 
         Ok(())

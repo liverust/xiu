@@ -9,8 +9,8 @@ use {
     define::{
         AvStatisticSender, ClientEvent, ClientEventConsumer, ClientEventProducer, FrameData,
         FrameDataReceiver, FrameDataSender, PubSubInfo, StreamHubEvent, StreamHubEventReceiver,
-        StreamHubEventSender, StreamStatisticSizeSender, SubscribeType, SubscriberInfo,
-        TStreamHandler, TransmitterEvent, TransmitterEventConsumer, TransmitterEventProducer,
+        StreamHubEventSender, StreamStatisticSizeSender, SubscriberInfo, TStreamHandler,
+        TransmitterEvent, TransmitterEventConsumer, TransmitterEventProducer,
     },
     errors::{ChannelError, ChannelErrorValue},
     std::collections::HashMap,
@@ -78,7 +78,7 @@ impl Transmitter {
                 data = self.data_consumer.recv() => {
                     if let Some(val) = data {
                         match val {
-                            FrameData::MetaData { timestamp, data } => {
+                            FrameData::MetaData { timestamp:_, data:_ } => {
 
                             }
                             FrameData::Audio { timestamp, data } => {
