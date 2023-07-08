@@ -77,7 +77,7 @@ impl Serialize for SubscriberInfo {
 #[derive(Debug, Clone)]
 pub struct PublisherInfo {
     pub id: Uuid,
-    pub sub_type: PublishType,
+    pub pub_type: PublishType,
     pub notify_info: NotifyInfo,
 }
 
@@ -90,7 +90,7 @@ impl Serialize for PublisherInfo {
         let mut state = serializer.serialize_struct("PublisherInfo", 3)?;
 
         state.serialize_field("id", &self.id.to_string())?;
-        state.serialize_field("sub_type", &self.sub_type)?;
+        state.serialize_field("sub_type", &self.pub_type)?;
         state.serialize_field("notify_info", &self.notify_info)?;
         state.end()
     }

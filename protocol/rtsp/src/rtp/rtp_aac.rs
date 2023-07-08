@@ -6,6 +6,7 @@ use super::errors::UnPackerError;
 use super::utils;
 use super::utils::Marshal;
 use super::utils::OnFrameFn;
+use super::utils::OnPacketFn;
 use super::utils::TPacker;
 use super::utils::TRtpPacker;
 use super::utils::TUnPacker;
@@ -19,9 +20,9 @@ use bytesio::bytes_reader::BytesReader;
 use bytesio::bytes_writer::BytesWriter;
 use streamhub::define::FrameData;
 
-pub type OnPacketFn = fn(BytesMut) -> Result<(), PackerError>;
+// pub type OnPacketFn = fn(BytesMut) -> Result<(), PackerError>;
 
-#[derive(Debug, Clone, Default)]
+#[derive(Default)]
 pub struct RtpAacPacker {
     header: RtpHeader,
     mtu: usize,
@@ -44,9 +45,10 @@ impl RtpAacPacker {
 }
 
 impl TPacker for RtpAacPacker {
-    fn pack(&mut self, data: &mut BytesMut) -> Result<(), PackerError> {
-        let data_len = data.len();
+    fn pack(&mut self, data: &mut BytesMut, timestamp: u32) -> Result<(), PackerError> {
+        self.header.timestamp = timestamp;
 
+        let data_len = data.len();
         let mut packet = RtpPacket::new(self.header.clone());
         packet.payload.put_u16(16);
         packet.payload.put_u8((data_len >> 5) as u8);
@@ -54,13 +56,17 @@ impl TPacker for RtpAacPacker {
         packet.payload.put(data);
 
         let packet_data = packet.marshal()?;
-        if let Some(f) = self.on_packet_handler {
+        if let Some(f) = &self.on_packet_handler {
             f(packet_data)?;
         }
 
         self.header.seq_number += 1;
 
         Ok(())
+    }
+
+    fn on_packet_handler(&mut self, f: OnPacketFn) {
+        self.on_packet_handler = Some(f);
     }
 }
 

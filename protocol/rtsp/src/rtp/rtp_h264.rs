@@ -4,6 +4,7 @@ use super::errors::UnPackerError;
 use super::utils;
 use super::utils::Marshal;
 use super::utils::OnFrameFn;
+use super::utils::OnPacketFn;
 use super::utils::TPacker;
 use super::utils::TRtpPacker;
 use super::utils::TUnPacker;
@@ -17,9 +18,7 @@ use bytesio::bytes_reader::BytesReader;
 use bytesio::bytes_writer::BytesWriter;
 use streamhub::define::FrameData;
 
-pub type OnPacketFn = fn(BytesMut) -> Result<(), PackerError>;
-
-#[derive(Debug, Clone, Default)]
+#[derive(Default)]
 pub struct RtpH264Packer {
     header: RtpHeader,
     mtu: usize,
@@ -67,7 +66,7 @@ impl RtpH264Packer {
             packet.header.marker = if fu_header & define::FU_END > 0 { 1 } else { 0 };
 
             let packet_bytesmut = packet.marshal()?;
-            if let Some(f) = self.on_packet_handler {
+            if let Some(f) = &self.on_packet_handler {
                 f(packet_bytesmut)?;
             }
 
@@ -85,7 +84,7 @@ impl RtpH264Packer {
         let packet_bytesmut = packet.marshal()?;
         self.header.seq_number += 1;
 
-        if let Some(f) = self.on_packet_handler {
+        if let Some(f) = &self.on_packet_handler {
             return f(packet_bytesmut);
         }
 
@@ -95,9 +94,14 @@ impl RtpH264Packer {
 
 impl TPacker for RtpH264Packer {
     //pack annexb h264 data
-    fn pack(&mut self, nalus: &mut BytesMut) -> Result<(), PackerError> {
+    fn pack(&mut self, nalus: &mut BytesMut, timestamp: u32) -> Result<(), PackerError> {
+        self.header.timestamp = timestamp;
         utils::split_annexb_and_process(nalus, self)?;
         Ok(())
+    }
+
+    fn on_packet_handler(&mut self, f: OnPacketFn) {
+        self.on_packet_handler = Some(f);
     }
 }
 

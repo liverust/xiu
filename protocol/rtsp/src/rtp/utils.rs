@@ -17,15 +17,16 @@ pub trait Marshal<T> {
     fn marshal(&self) -> T;
 }
 
+pub type OnFrameFn = Box<dyn Fn(FrameData) -> Result<(), UnPackerError> + Send>;
+pub type OnPacketFn = Box<dyn Fn(BytesMut) -> Result<(), PackerError> + Send>; //fn(BytesMut) -> Result<(), PackerError>;
+
 pub trait TPacker: Send {
-    fn pack(&mut self, nalus: &mut BytesMut) -> Result<(), PackerError>;
+    fn pack(&mut self, nalus: &mut BytesMut, timestamp: u32) -> Result<(), PackerError>;
+    fn on_packet_handler(&mut self, f: OnPacketFn);
 }
 pub trait TRtpPacker: TPacker {
     fn pack_nalu(&mut self, nalu: BytesMut) -> Result<(), PackerError>;
 }
-
-pub type OnFrameFn = Box<dyn Fn(FrameData) -> Result<(), UnPackerError> + Send>;
-
 pub trait TUnPacker: Send {
     fn unpack(&mut self, reader: &mut BytesReader) -> Result<(), UnPackerError>;
     fn on_frame_handler(&mut self, f: OnFrameFn);

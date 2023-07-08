@@ -249,25 +249,19 @@ impl Common {
             String::from("unknown")
         };
 
-        match self.session_type {
-            SessionType::Client => SubscriberInfo {
-                id: sub_id,
-                /*rtmp local client subscribe from local rtmp session
-                and publish(relay) the rtmp steam to remote RTMP server*/
-                sub_type: SubscribeType::PublisherRtmp,
-                notify_info: NotifyInfo {
-                    request_url: self.request_url.clone(),
-                    remote_addr,
-                },
-            },
-            SessionType::Server => SubscriberInfo {
-                id: sub_id,
-                /* rtmp player from remote clent */
-                sub_type: SubscribeType::PlayerRtmp,
-                notify_info: NotifyInfo {
-                    request_url: self.request_url.clone(),
-                    remote_addr,
-                },
+        let sub_type = match self.session_type {
+            SessionType::Client => SubscribeType::PublisherRtmp,
+            SessionType::Server => SubscribeType::PlayerRtmp,
+        };
+
+        SubscriberInfo {
+            id: sub_id,
+            /*rtmp local client subscribe from local rtmp session
+            and publish(relay) the rtmp steam to remote RTMP server*/
+            sub_type,
+            notify_info: NotifyInfo {
+                request_url: self.request_url.clone(),
+                remote_addr,
             },
         }
     }
@@ -279,14 +273,14 @@ impl Common {
             String::from("unknown")
         };
 
-        let sub_type = match self.session_type {
+        let pub_type = match self.session_type {
             SessionType::Client => PublishType::RelayRtmp,
             SessionType::Server => PublishType::PushRtmp,
         };
 
         PublisherInfo {
             id: sub_id,
-            sub_type,
+            pub_type,
             notify_info: NotifyInfo {
                 request_url: self.request_url.clone(),
                 remote_addr,

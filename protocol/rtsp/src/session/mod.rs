@@ -184,53 +184,12 @@ impl RtspServerSession {
             }
         }
 
-        for media in &self.sdp.medias {
-            let media_control = if let Some(media_control_val) = media.attributes.get("control") {
-                media_control_val.clone()
-            } else {
-                String::from("")
-            };
-
-            let media_name = &media.media_type;
-            match media_name.as_str() {
-                "audio" => {
-                    let codec_id = rtsp_codec::RTSP_CODEC_NAME_2_ID
-                        .get(&media_name.as_str())
-                        .unwrap()
-                        .clone();
-                    let codec_info = RtspCodecInfo {
-                        codec_id,
-                        payload_type: media.rtpmap.payload_type as u8,
-                        sample_rate: media.rtpmap.clock_rate,
-                        channel_count: media.rtpmap.encoding_param.parse().unwrap(),
-                    };
-
-                    let track = RtspTrack::new(TrackType::Audio, codec_info, media_control);
-
-                    self.tracks.insert(TrackType::Audio, track);
-                }
-                "video" => {
-                    let codec_id = rtsp_codec::RTSP_CODEC_NAME_2_ID
-                        .get(&media_name.as_str())
-                        .unwrap()
-                        .clone();
-                    let codec_info = RtspCodecInfo {
-                        codec_id,
-                        payload_type: media.rtpmap.payload_type as u8,
-                        sample_rate: media.rtpmap.clock_rate,
-                        ..Default::default()
-                    };
-                    let track = RtspTrack::new(TrackType::Video, codec_info, media_control);
-                    self.tracks.insert(TrackType::Video, track);
-                }
-                _ => {}
-            }
-        }
+        //new tracks for publish session
+        self.new_tracks()?;
 
         // The sender is used for sending audio/video frame data to stream hub
         // receiver is used to passing to stream hub and receive the a/v frame data
         let (sender, receiver) = mpsc::unbounded_channel();
-
         for (_, track) in &mut self.tracks {
             if let Some(unpacker) = &mut track.rtp_unpacker {
                 let sender_out = sender.clone();
@@ -260,6 +219,51 @@ impl RtspServerSession {
             });
         }
 
+        Ok(())
+    }
+
+    fn new_tracks(&mut self) -> Result<(), SessionError> {
+        for media in &self.sdp.medias {
+            let media_control = if let Some(media_control_val) = media.attributes.get("control") {
+                media_control_val.clone()
+            } else {
+                String::from("")
+            };
+
+            let media_name = &media.media_type;
+            match media_name.as_str() {
+                "audio" => {
+                    let codec_id = rtsp_codec::RTSP_CODEC_NAME_2_ID
+                        .get(&media_name.as_str())
+                        .unwrap()
+                        .clone();
+                    let codec_info = RtspCodecInfo {
+                        codec_id,
+                        payload_type: media.rtpmap.payload_type as u8,
+                        sample_rate: media.rtpmap.clock_rate,
+                        channel_count: media.rtpmap.encoding_param.parse().unwrap(),
+                    };
+
+                    let track = RtspTrack::new(TrackType::Audio, codec_info, media_control);
+                    self.tracks.insert(TrackType::Audio, track);
+                }
+                "video" => {
+                    let codec_id = rtsp_codec::RTSP_CODEC_NAME_2_ID
+                        .get(&media_name.as_str())
+                        .unwrap()
+                        .clone();
+                    let codec_info = RtspCodecInfo {
+                        codec_id,
+                        payload_type: media.rtpmap.payload_type as u8,
+                        sample_rate: media.rtpmap.clock_rate,
+                        ..Default::default()
+                    };
+                    let track = RtspTrack::new(TrackType::Video, codec_info, media_control);
+                    self.tracks.insert(TrackType::Video, track);
+                }
+                _ => {}
+            }
+        }
         Ok(())
     }
 
@@ -315,7 +319,73 @@ impl RtspServerSession {
                 rtsp_method_name::SETUP => {
                     self.handle_setup(&rtsp_request)?;
                 }
-                rtsp_method_name::PLAY => {}
+                rtsp_method_name::PLAY => {
+                    //new tracks for subscribe session
+                    self.new_tracks()?;
+
+                    // The sender is used for sending audio/video frame data to stream hub
+                    // receiver is used to passing to stream hub and receive the a/v frame data
+                    let (sender, mut receiver) = mpsc::unbounded_channel();
+                    // for (_, track) in &mut self.tracks {
+                    //     if let Some(unpacker) = &mut track.rtp_unpacker {
+                    //         let sender_out = sender.clone();
+                    //         unpacker.on_frame_handler(Box::new(
+                    //             move |msg: FrameData| -> Result<(), UnPackerError> {
+                    //                 if let Err(err) = sender_out.send(msg) {
+                    //                     log::error!("send frame error: {}", err);
+                    //                 }
+                    //                 Ok(())
+                    //             },
+                    //         ));
+                    //     }
+                    // }
+
+                    let publish_event = StreamHubEvent::Subscribe {
+                        identifier: StreamIdentifier::Rtsp {
+                            stream_path: rtsp_request.path.clone(),
+                        },
+                        sender,
+                        info: self.get_subscriber_info(),
+                    };
+
+                    if self.event_producer.send(publish_event).is_err() {
+                        return Err(SessionError {
+                            value: SessionErrorValue::StreamHubEventSendErr,
+                        });
+                    }
+
+                    loop {
+                        if let Some(frame_data) = receiver.recv().await {
+                            match frame_data {
+                                FrameData::Audio {
+                                    timestamp,
+                                    mut data,
+                                } => {
+                                    if let Some(audio_track) =
+                                        self.tracks.get_mut(&TrackType::Audio)
+                                    {
+                                        if let Some(packer) = &mut audio_track.rtp_packer {
+                                            packer.pack(&mut data, timestamp);
+                                        }
+                                    }
+                                }
+                                FrameData::Video {
+                                    timestamp,
+                                    mut data,
+                                } => {
+                                    if let Some(video_track) =
+                                        self.tracks.get_mut(&TrackType::Video)
+                                    {
+                                        if let Some(packer) = &mut video_track.rtp_packer {
+                                            packer.pack(&mut data, timestamp);
+                                        }
+                                    }
+                                }
+                                FrameData::MetaData { timestamp, data } => {}
+                            }
+                        }
+                    }
+                }
                 rtsp_method_name::PAUSE => {}
                 rtsp_method_name::TEARDOWN => {}
                 rtsp_method_name::GET_PARAMETER => {}
@@ -329,6 +399,23 @@ impl RtspServerSession {
         Ok(())
     }
 
+    fn get_subscriber_info(&mut self) -> SubscriberInfo {
+        let id = if let Ok(uuid) = Uuid::from_str(&self.session_id) {
+            uuid
+        } else {
+            Uuid::from_str("unknown").unwrap()
+        };
+
+        SubscriberInfo {
+            id,
+            sub_type: SubscribeType::PlayerRtsp,
+            notify_info: NotifyInfo {
+                request_url: String::from(""),
+                remote_addr: String::from(""),
+            },
+        }
+    }
+
     fn get_publisher_info(&mut self) -> PublisherInfo {
         let id = if let Ok(uuid) = Uuid::from_str(&self.session_id) {
             uuid
@@ -338,7 +425,7 @@ impl RtspServerSession {
 
         PublisherInfo {
             id,
-            sub_type: PublishType::PushRtsp,
+            pub_type: PublishType::PushRtsp,
             notify_info: NotifyInfo {
                 request_url: String::from(""),
                 remote_addr: String::from(""),

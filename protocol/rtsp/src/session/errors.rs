@@ -23,6 +23,8 @@ pub enum SessionErrorValue {
     Utf8Error(#[cause] Utf8Error),
     #[fail(display = "stream hub event send error\n")]
     StreamHubEventSendErr,
+    #[fail(display = "cannot receive frame data from stream hub\n")]
+    CannotReceiveFrameData,
 }
 
 impl From<BytesIOError> for SessionError {
