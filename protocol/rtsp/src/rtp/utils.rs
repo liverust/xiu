@@ -19,7 +19,7 @@ pub trait Marshal<T> {
     fn marshal(&self) -> T;
 }
 
-pub type OnFrameFn = Box<dyn Fn(FrameData) -> Result<(), UnPackerError> + Send>;
+pub type OnFrameFn = Box<dyn Fn(FrameData) -> Result<(), UnPackerError> + Send + Sync>;
 // pub type OnFrameFn =
 //     Box<dyn Fn(FrameData) -> Pin<Box<dyn Future<Output = ()> + Send + 'static>> + Send + Sync>;
 
@@ -40,7 +40,7 @@ pub type OnPacketFn = Box<
 >; //fn(BytesMut) -> Result<(), PackerError>;
 
 #[async_trait]
-pub trait TPacker: Send {
+pub trait TPacker: Send + Sync {
     async fn pack(&mut self, nalus: &mut BytesMut, timestamp: u32) -> Result<(), PackerError>;
     fn on_packet_handler(&mut self, f: OnPacketFn);
 }
@@ -49,7 +49,7 @@ pub trait TPacker: Send {
 pub trait TRtpPacker: TPacker {
     async fn pack_nalu(&mut self, nalu: BytesMut) -> Result<(), PackerError>;
 }
-pub trait TUnPacker: Send {
+pub trait TUnPacker: Send + Sync {
     fn unpack(&mut self, reader: &mut BytesReader) -> Result<(), UnPackerError>;
     fn on_frame_handler(&mut self, f: OnFrameFn);
 }

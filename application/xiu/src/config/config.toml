@@ -22,6 +22,13 @@ address = "192.168.0.3"
 port = 1935
 
 ##########################
+#    RTSP configurations  #
+##########################
+[rtsp]
+enabled = true
+port = 445
+
+##########################
 # HTTPFLV configurations #
 ##########################
 [httpflv]

@@ -2219,6 +2219,7 @@ dependencies = [
  "libc",
  "log",
  "rtmp",
+ "rtsp",
  "serde",
  "serde_derive",
  "serde_json",

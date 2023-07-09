@@ -120,13 +120,13 @@ impl Transmitter {
 
 pub struct StreamsHub {
     //app_name to stream_name to producer
-    channels: HashMap<StreamIdentifier, TransmitterEventProducer>,
+    streams: HashMap<StreamIdentifier, TransmitterEventProducer>,
     //save info to kick off client
-    channels_info: HashMap<Uuid, PubSubInfo>,
+    streams_info: HashMap<Uuid, PubSubInfo>,
     //event is consumed in Channels, produced from other rtmp sessions
-    channel_event_consumer: StreamHubEventReceiver,
+    hub_event_receiver: StreamHubEventReceiver,
     //event is produced from other rtmp sessions
-    channel_event_producer: StreamHubEventSender,
+    hub_event_sender: StreamHubEventSender,
     //client_event_producer: client_event_producer
     client_event_producer: ClientEventProducer,
     //The rtmp static push/pull and the hls transfer is triggered actively,
@@ -146,10 +146,10 @@ impl StreamsHub {
         let (client_producer, _) = broadcast::channel(100);
 
         Self {
-            channels: HashMap::new(),
-            channels_info: HashMap::new(),
-            channel_event_consumer: event_consumer,
-            channel_event_producer: event_producer,
+            streams: HashMap::new(),
+            streams_info: HashMap::new(),
+            hub_event_receiver: event_consumer,
+            hub_event_sender: event_producer,
             client_event_producer: client_producer,
             rtmp_push_enabled: false,
             rtmp_pull_enabled: false,
@@ -173,8 +173,8 @@ impl StreamsHub {
         self.hls_enabled = enabled;
     }
 
-    pub fn get_channel_event_producer(&mut self) -> StreamHubEventSender {
-        self.channel_event_producer.clone()
+    pub fn get_hub_event_producer(&mut self) -> StreamHubEventSender {
+        self.hub_event_sender.clone()
     }
 
     pub fn get_client_event_consumer(&mut self) -> ClientEventConsumer {
@@ -182,7 +182,7 @@ impl StreamsHub {
     }
 
     pub async fn event_loop(&mut self) {
-        while let Some(message) = self.channel_event_consumer.recv().await {
+        while let Some(message) = self.hub_event_receiver.recv().await {
             let event_serialize_str = if let Ok(data) = serde_json::to_string(&message) {
                 log::info!("event data: {}", data);
                 data
@@ -203,7 +203,7 @@ impl StreamsHub {
                             if let Some(notifier) = &self.notifier {
                                 notifier.on_publish_notify(event_serialize_str).await;
                             }
-                            self.channels_info
+                            self.streams_info
                                 .insert(info.id, PubSubInfo::Publish { identifier });
                         }
                         Err(err) => {
@@ -242,7 +242,7 @@ impl StreamsHub {
                                 notifier.on_play_notify(event_serialize_str).await;
                             }
 
-                            self.channels_info.insert(
+                            self.streams_info.insert(
                                 sub_id,
                                 PubSubInfo::Subscribe {
                                     identifier,
@@ -289,7 +289,7 @@ impl StreamsHub {
         size_sender: StreamStatisticSizeSender,
     ) -> Result<(), ChannelError> {
         let mut stream_count: usize = 0;
-        for v in self.channels.values() {
+        for v in self.streams.values() {
             stream_count += 1;
             if let Err(err) = v.send(TransmitterEvent::Api {
                 sender: data_sender.clone(),
@@ -312,7 +312,7 @@ impl StreamsHub {
     }
 
     fn api_kick_off_client(&mut self, uid: Uuid) {
-        let info = if let Some(info) = self.channels_info.get(&uid) {
+        let info = if let Some(info) = self.streams_info.get(&uid) {
             info.clone()
         } else {
             return;
@@ -350,7 +350,7 @@ impl StreamsHub {
         sub_info: SubscriberInfo,
         sender: FrameDataSender,
     ) -> Result<(), ChannelError> {
-        if let Some(producer) = self.channels.get_mut(identifer) {
+        if let Some(producer) = self.streams.get_mut(identifer) {
             let event = TransmitterEvent::Subscribe {
                 sender,
                 info: sub_info,
@@ -388,7 +388,7 @@ impl StreamsHub {
         identifer: &StreamIdentifier,
         sub_info: SubscriberInfo,
     ) -> Result<(), ChannelError> {
-        match self.channels.get_mut(identifer) {
+        match self.streams.get_mut(identifer) {
             Some(producer) => {
                 let event = TransmitterEvent::UnSubscribe { info: sub_info };
                 producer.send(event).map_err(|_| ChannelError {
@@ -412,7 +412,7 @@ impl StreamsHub {
         receiver: FrameDataReceiver,
         handler: Arc<dyn TStreamHandler>,
     ) -> Result<(), ChannelError> {
-        if self.channels.get(&identifier).is_some() {
+        if self.streams.get(&identifier).is_some() {
             return Err(ChannelError {
                 value: ChannelErrorValue::Exists,
             });
@@ -434,7 +434,7 @@ impl StreamsHub {
             }
         });
 
-        self.channels.insert(identifier.clone(), event_publisher);
+        self.streams.insert(identifier.clone(), event_publisher);
 
         if self.rtmp_push_enabled || self.hls_enabled {
             let client_event = ClientEvent::Publish { identifier };
@@ -451,13 +451,13 @@ impl StreamsHub {
     }
 
     fn unpublish(&mut self, identifier: &StreamIdentifier) -> Result<(), ChannelError> {
-        match self.channels.get_mut(identifier) {
+        match self.streams.get_mut(identifier) {
             Some(producer) => {
                 let event = TransmitterEvent::UnPublish {};
                 producer.send(event).map_err(|_| ChannelError {
                     value: ChannelErrorValue::SendError,
                 })?;
-                self.channels.remove(identifier);
+                self.streams.remove(identifier);
                 log::info!("unpublish remove stream, stream identifier: {}", identifier);
             }
             None => {

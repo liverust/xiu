@@ -10,6 +10,7 @@ use {
         relay::{pull_client::PullClient, push_client::PushClient},
         rtmp::RtmpServer,
     },
+    rtsp::rtsp::RtspServer,
     streamhub::{notify::Notifier, StreamsHub},
     tokio,
 };
@@ -44,6 +45,7 @@ impl Service {
         self.start_httpflv(&mut stream_hub).await?;
         self.start_hls(&mut stream_hub).await?;
         self.start_rtmp(&mut stream_hub).await?;
+        self.start_rtsp(&mut stream_hub).await?;
         self.start_http_api_server(&mut stream_hub).await?;
 
         tokio::spawn(async move {
@@ -54,7 +56,7 @@ impl Service {
     }
 
     async fn start_http_api_server(&mut self, stream_hub: &mut StreamsHub) -> Result<()> {
-        let producer = stream_hub.get_channel_event_producer();
+        let producer = stream_hub.get_hub_event_producer();
 
         let http_api_port = if let Some(httpapi) = &self.cfg.httpapi {
             httpapi.port
@@ -82,7 +84,7 @@ impl Service {
                 1
             };
 
-            let producer = stream_hub.get_channel_event_producer();
+            let producer = stream_hub.get_hub_event_producer();
 
             /*static push */
             if let Some(push_cfg_values) = &rtmp_cfg_value.push {
@@ -150,6 +152,30 @@ impl Service {
         Ok(())
     }
 
+    async fn start_rtsp(&mut self, stream_hub: &mut StreamsHub) -> Result<()> {
+        let rtsp_cfg = &self.cfg.rtsp;
+
+        if let Some(rtsp_cfg_value) = rtsp_cfg {
+            if !rtsp_cfg_value.enabled {
+                return Ok(());
+            }
+
+            let producer = stream_hub.get_hub_event_producer();
+
+            let listen_port = rtsp_cfg_value.port;
+            let address = format!("0.0.0.0:{listen_port}");
+
+            let mut rtsp_server = RtspServer::new(address, producer);
+            tokio::spawn(async move {
+                if let Err(err) = rtsp_server.run().await {
+                    log::error!("rtsp server error: {}\n", err);
+                }
+            });
+        }
+
+        Ok(())
+    }
+
     async fn start_httpflv(&mut self, stream_hub: &mut StreamsHub) -> Result<()> {
         let httpflv_cfg = &self.cfg.httpflv;
 
@@ -158,7 +184,7 @@ impl Service {
                 return Ok(());
             }
             let port = httpflv_cfg_value.port;
-            let event_producer = stream_hub.get_channel_event_producer();
+            let event_producer = stream_hub.get_hub_event_producer();
 
             tokio::spawn(async move {
                 if let Err(err) = httpflv_server::run(event_producer, port).await {
@@ -178,7 +204,7 @@ impl Service {
                 return Ok(());
             }
 
-            let event_producer = stream_hub.get_channel_event_producer();
+            let event_producer = stream_hub.get_hub_event_producer();
             let cient_event_consumer = stream_hub.get_client_event_consumer();
             let mut rtmp_event_processor =
                 RtmpEventProcessor::new(cient_event_consumer, event_producer);

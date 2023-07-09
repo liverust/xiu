@@ -51,7 +51,7 @@ async fn main() -> Result<()> {
     let push_rtmp_url = matches.get_one::<String>("pushrtmp").unwrap().clone();
 
     let mut stream_hub = StreamsHub::new(None);
-    let producer = stream_hub.get_channel_event_producer();
+    let producer = stream_hub.get_hub_event_producer();
     tokio::spawn(async move { stream_hub.run().await });
 
     let mut pull_parser = RtmpUrlParser::new(pull_rtmp_url);

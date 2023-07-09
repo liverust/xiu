@@ -32,6 +32,7 @@ uuid = { version = "0.6.5", features = ["v4"] }
 # hls = "0.2.0"    
 env_logger_extend = "0.1.1"
 rtmp = { path = "../../protocol/rtmp/" }
+rtsp = { path = "../../protocol/rtsp/" }
 httpflv = { path = "../../protocol/httpflv/" }
 hls = { path = "../../protocol/hls/" }
 streamhub = { path = "../../library/streamhub/" }

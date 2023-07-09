@@ -327,10 +327,15 @@ impl RtspServerSession {
                     for (_, track) in &mut self.tracks {
                         if let Some(packer) = &mut track.rtp_packer {
                             let io_out = Arc::clone(&self.io);
+                            let channel_identifer = track.transport.interleaved[0];
+
                             packer.on_packet_handler(Box::new(move |msg: BytesMut| {
                                 let io_in = io_out.clone();
                                 Box::pin(async move {
                                     let mut writer = AsyncBytesWriter::new(io_in);
+                                    writer.write_u8(0x24)?;
+                                    writer.write_u8(channel_identifer)?;
+                                    writer.write_u16::<BigEndian>(msg.len() as u16)?;
                                     writer.write(&msg)?;
                                     writer.flush().await?;
 
