@@ -173,7 +173,7 @@ impl StreamsHub {
         self.hls_enabled = enabled;
     }
 
-    pub fn get_hub_event_producer(&mut self) -> StreamHubEventSender {
+    pub fn get_hub_event_sender(&mut self) -> StreamHubEventSender {
         self.hub_event_sender.clone()
     }
 

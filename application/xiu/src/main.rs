@@ -39,7 +39,7 @@ async fn main() -> Result<()> {
                 .long("rtsp")
                 .short('t')
                 .value_name("port")
-                .help("Specify the rtsp listening port.(e.g.:1935)")
+                .help("Specify the rtsp listening port.(e.g.:554)")
                 .value_parser(value_parser!(usize)),
         )
         .arg(
@@ -71,7 +71,7 @@ async fn main() -> Result<()> {
         )
         .group(
             ArgGroup::new("vers")
-                .args(["config_file_path", "rtmp"])
+                .args(["config_file_path", "rtmp", "rtsp"])
                 .required(true),
         );
 
@@ -113,6 +113,7 @@ async fn main() -> Result<()> {
             Some(val) => val.clone(),
             None => String::from("info"),
         };
+
         Config::new(rtmp_port, rtsp_port, httpflv_port, hls_port, log_level)
     };
 

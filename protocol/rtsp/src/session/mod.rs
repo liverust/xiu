@@ -152,29 +152,29 @@ impl RtspServerSession {
         response
     }
 
-    fn handle_options(&mut self, rtsp_request: &RtspRequest) -> Result<(), SessionError> {
+    async fn handle_options(&mut self, rtsp_request: &RtspRequest) -> Result<(), SessionError> {
         let status_code = http::StatusCode::OK;
         let mut response = Self::gen_response(status_code, &rtsp_request);
         let public_str = rtsp_method_name::ARRAY.join(",");
         response.headers.insert("Public".to_string(), public_str);
-        self.send_response(&response)?;
+        self.send_response(&response).await?;
 
         Ok(())
     }
 
-    fn handle_describe(&mut self, rtsp_request: &RtspRequest) -> Result<(), SessionError> {
+    async fn handle_describe(&mut self, rtsp_request: &RtspRequest) -> Result<(), SessionError> {
         let status_code = http::StatusCode::OK;
         let mut response = Self::gen_response(status_code, &rtsp_request);
         response.body = Some(self.sdp.marshal());
         response
             .headers
             .insert("Content-Type".to_string(), "application/sdp".to_string());
-        self.send_response(&response)?;
+        self.send_response(&response).await?;
 
         Ok(())
     }
 
-    fn handle_announce(&mut self, rtsp_request: &RtspRequest) -> Result<(), SessionError> {
+    async fn handle_announce(&mut self, rtsp_request: &RtspRequest) -> Result<(), SessionError> {
         if let Some(request_body) = &rtsp_request.body {
             if let Some(sdp) = Sdp::unmarshal(&request_body) {
                 self.sdp = sdp;
@@ -216,6 +216,10 @@ impl RtspServerSession {
             });
         }
 
+        let status_code = http::StatusCode::OK;
+        let mut response = Self::gen_response(status_code, &rtsp_request);
+        self.send_response(&response).await?;
+
         Ok(())
     }
 
@@ -228,10 +232,11 @@ impl RtspServerSession {
             };
 
             let media_name = &media.media_type;
+            log::info!("media_name: {}", media_name);
             match media_name.as_str() {
                 "audio" => {
                     let codec_id = rtsp_codec::RTSP_CODEC_NAME_2_ID
-                        .get(&media_name.as_str())
+                        .get(&media.rtpmap.encoding_name.to_lowercase().as_str())
                         .unwrap()
                         .clone();
                     let codec_info = RtspCodecInfo {
@@ -246,7 +251,7 @@ impl RtspServerSession {
                 }
                 "video" => {
                     let codec_id = rtsp_codec::RTSP_CODEC_NAME_2_ID
-                        .get(&media_name.as_str())
+                        .get(&media.rtpmap.encoding_name.to_lowercase().as_str())
                         .unwrap()
                         .clone();
                     let codec_info = RtspCodecInfo {
@@ -264,7 +269,7 @@ impl RtspServerSession {
         Ok(())
     }
 
-    fn handle_setup(&mut self, rtsp_request: &RtspRequest) -> Result<(), SessionError> {
+    async fn handle_setup(&mut self, rtsp_request: &RtspRequest) -> Result<(), SessionError> {
         let status_code = http::StatusCode::OK;
         let mut response = Self::gen_response(status_code, &rtsp_request);
 
@@ -292,8 +297,81 @@ impl RtspServerSession {
             break;
         }
 
-        self.send_response(&response)?;
+        self.send_response(&response).await?;
 
+        Ok(())
+    }
+
+    async fn handle_play(&mut self, rtsp_request: &RtspRequest) -> Result<(), SessionError> {
+        //new tracks for subscribe session
+        self.new_tracks()?;
+
+        // The sender is used for sending audio/video frame data to stream hub
+        // receiver is used to passing to stream hub and receive the a/v frame data
+        let (sender, mut receiver) = mpsc::unbounded_channel();
+
+        for (_, track) in &mut self.tracks {
+            if let Some(packer) = &mut track.rtp_packer {
+                let io_out = Arc::clone(&self.io);
+                let channel_identifer = track.transport.interleaved[0];
+
+                packer.on_packet_handler(Box::new(move |msg: BytesMut| {
+                    let io_in = io_out.clone();
+                    Box::pin(async move {
+                        let mut writer = AsyncBytesWriter::new(io_in);
+                        writer.write_u8(0x24)?;
+                        writer.write_u8(channel_identifer)?;
+                        writer.write_u16::<BigEndian>(msg.len() as u16)?;
+                        writer.write(&msg)?;
+                        writer.flush().await?;
+
+                        Ok(())
+                    })
+                }));
+            }
+        }
+
+        let publish_event = StreamHubEvent::Subscribe {
+            identifier: StreamIdentifier::Rtsp {
+                stream_path: rtsp_request.path.clone(),
+            },
+            sender,
+            info: self.get_subscriber_info(),
+        };
+
+        if self.event_producer.send(publish_event).is_err() {
+            return Err(SessionError {
+                value: SessionErrorValue::StreamHubEventSendErr,
+            });
+        }
+
+        loop {
+            if let Some(frame_data) = receiver.recv().await {
+                match frame_data {
+                    FrameData::Audio {
+                        timestamp,
+                        mut data,
+                    } => {
+                        if let Some(audio_track) = self.tracks.get_mut(&TrackType::Audio) {
+                            if let Some(packer) = &mut audio_track.rtp_packer {
+                                packer.pack(&mut data, timestamp).await?;
+                            }
+                        }
+                    }
+                    FrameData::Video {
+                        timestamp,
+                        mut data,
+                    } => {
+                        if let Some(video_track) = self.tracks.get_mut(&TrackType::Video) {
+                            if let Some(packer) = &mut video_track.rtp_packer {
+                                packer.pack(&mut data, timestamp).await?;
+                            }
+                        }
+                    }
+                    FrameData::MetaData { timestamp, data } => {}
+                }
+            }
+        }
         Ok(())
     }
 
@@ -305,91 +383,19 @@ impl RtspServerSession {
         if let Some(rtsp_request) = RtspRequest::unmarshal(std::str::from_utf8(&data)?) {
             match rtsp_request.method.as_str() {
                 rtsp_method_name::OPTIONS => {
-                    self.handle_options(&rtsp_request)?;
+                    self.handle_options(&rtsp_request).await?;
                 }
                 rtsp_method_name::DESCRIBE => {
-                    self.handle_describe(&rtsp_request)?;
+                    self.handle_describe(&rtsp_request).await?;
                 }
                 rtsp_method_name::ANNOUNCE => {
-                    self.handle_announce(&rtsp_request)?;
+                    self.handle_announce(&rtsp_request).await?;
                 }
                 rtsp_method_name::SETUP => {
-                    self.handle_setup(&rtsp_request)?;
+                    self.handle_setup(&rtsp_request).await?;
                 }
                 rtsp_method_name::PLAY => {
-                    //new tracks for subscribe session
-                    self.new_tracks()?;
-
-                    // The sender is used for sending audio/video frame data to stream hub
-                    // receiver is used to passing to stream hub and receive the a/v frame data
-                    let (sender, mut receiver) = mpsc::unbounded_channel();
-
-                    for (_, track) in &mut self.tracks {
-                        if let Some(packer) = &mut track.rtp_packer {
-                            let io_out = Arc::clone(&self.io);
-                            let channel_identifer = track.transport.interleaved[0];
-
-                            packer.on_packet_handler(Box::new(move |msg: BytesMut| {
-                                let io_in = io_out.clone();
-                                Box::pin(async move {
-                                    let mut writer = AsyncBytesWriter::new(io_in);
-                                    writer.write_u8(0x24)?;
-                                    writer.write_u8(channel_identifer)?;
-                                    writer.write_u16::<BigEndian>(msg.len() as u16)?;
-                                    writer.write(&msg)?;
-                                    writer.flush().await?;
-
-                                    Ok(())
-                                })
-                            }));
-                        }
-                    }
-
-                    let publish_event = StreamHubEvent::Subscribe {
-                        identifier: StreamIdentifier::Rtsp {
-                            stream_path: rtsp_request.path.clone(),
-                        },
-                        sender,
-                        info: self.get_subscriber_info(),
-                    };
-
-                    if self.event_producer.send(publish_event).is_err() {
-                        return Err(SessionError {
-                            value: SessionErrorValue::StreamHubEventSendErr,
-                        });
-                    }
-
-                    loop {
-                        if let Some(frame_data) = receiver.recv().await {
-                            match frame_data {
-                                FrameData::Audio {
-                                    timestamp,
-                                    mut data,
-                                } => {
-                                    if let Some(audio_track) =
-                                        self.tracks.get_mut(&TrackType::Audio)
-                                    {
-                                        if let Some(packer) = &mut audio_track.rtp_packer {
-                                            packer.pack(&mut data, timestamp).await?;
-                                        }
-                                    }
-                                }
-                                FrameData::Video {
-                                    timestamp,
-                                    mut data,
-                                } => {
-                                    if let Some(video_track) =
-                                        self.tracks.get_mut(&TrackType::Video)
-                                    {
-                                        if let Some(packer) = &mut video_track.rtp_packer {
-                                            packer.pack(&mut data, timestamp).await?;
-                                        }
-                                    }
-                                }
-                                FrameData::MetaData { timestamp, data } => {}
-                            }
-                        }
-                    }
+                    self.handle_play(&rtsp_request).await?;
                 }
                 rtsp_method_name::PAUSE => {}
                 rtsp_method_name::TEARDOWN => {}
@@ -425,7 +431,7 @@ impl RtspServerSession {
         let id = if let Ok(uuid) = Uuid::from_str(&self.session_id) {
             uuid
         } else {
-            Uuid::from_str("unknown").unwrap()
+            Uuid::new_v4()
         };
 
         PublisherInfo {
@@ -450,8 +456,9 @@ impl RtspServerSession {
             }
         }
     }
-    fn send_response(&mut self, response: &RtspResponse) -> Result<(), SessionError> {
+    async fn send_response(&mut self, response: &RtspResponse) -> Result<(), SessionError> {
         self.writer.write(response.marshal().as_bytes())?;
+        self.writer.flush().await;
 
         Ok(())
         //response.

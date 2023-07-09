@@ -179,8 +179,12 @@ impl Unmarshal for Sdp {
         let mut sdp = Sdp::default();
         sdp.raw_string = raw_data.to_string();
 
+        log::info!("sdp raw: {}", raw_data);
         let lines: Vec<&str> = raw_data.split(|c| c == '\r' || c == '\n').collect();
         for line in lines {
+            if line == "" {
+                continue;
+            }
             let kv: Vec<&str> = line.trim().splitn(2, '=').collect();
             if kv.len() < 2 {
                 log::error!("Sdp current line : {} parse error!", line);

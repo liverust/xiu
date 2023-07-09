@@ -39,7 +39,7 @@ impl Config {
         if rtsp_port > 0 {
             rtsp_config = Some(RtspConfig {
                 enabled: true,
-                port: rtmp_port,
+                port: rtsp_port,
             });
         }
 
