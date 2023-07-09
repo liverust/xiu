@@ -2,6 +2,7 @@ pub mod define;
 pub mod errors;
 use crate::global_trait::Marshal;
 use crate::http::parser::RtspResponse;
+use crate::rtsp_range::RtspRange;
 
 use super::rtsp_codec;
 use crate::global_trait::Unmarshal;
@@ -74,10 +75,13 @@ impl InterleavedBinaryData {
     // two-byte integer in network byte order
     fn new(reader: &mut BytesReader) -> Result<Option<Self>, SessionError> {
         let is_dollar_sign = reader.advance_u8()? == 0x24;
+        log::info!("dollar sign: {}", is_dollar_sign);
         if is_dollar_sign {
             reader.read_u8()?;
             let channel_identifier = reader.read_u8()?;
+            log::info!("channel_identifier: {}", channel_identifier);
             let length = reader.read_u16::<BigEndian>()?;
+            log::info!("length: {}", length);
             return Ok(Some(InterleavedBinaryData {
                 channel_identifier,
                 length,
@@ -126,6 +130,8 @@ impl RtspServerSession {
                     }
                 }
             }
+
+            log::info!("left bytes: {}", self.reader.len());
         }
     }
 
@@ -402,7 +408,22 @@ impl RtspServerSession {
                 rtsp_method_name::GET_PARAMETER => {}
                 rtsp_method_name::SET_PARAMETER => {}
                 rtsp_method_name::REDIRECT => {}
-                rtsp_method_name::RECORD => {}
+                rtsp_method_name::RECORD => {
+                    if let Some(range_str) = rtsp_request.headers.get(&String::from("Range")) {
+                        if let Some(range) = RtspRange::unmarshal(&range_str) {
+                            let status_code = http::StatusCode::OK;
+                            let mut response = Self::gen_response(status_code, &rtsp_request);
+                            response
+                                .headers
+                                .insert(String::from("Range"), range.marshal());
+                            response
+                                .headers
+                                .insert("Session".to_string(), self.session_id.clone());
+
+                            self.send_response(&response).await?;
+                        }
+                    }
+                }
                 _ => {}
             }
         }

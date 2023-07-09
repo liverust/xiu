@@ -101,7 +101,7 @@ pub fn current_time() -> u64 {
     let duration = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH);
 
     match duration {
-        Ok(result) => result.as_millis() as u64,
+        Ok(result) => (result.as_nanos() / 1000) as u64,
         _ => 0,
     }
 }

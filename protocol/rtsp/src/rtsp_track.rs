@@ -69,7 +69,7 @@ impl RtspTrack {
     }
 
     pub fn on_rtcp(&mut self, reader: &mut BytesReader) {
-        let mut reader_clone = BytesReader::new(reader.get_remaining_bytes());
+        let mut reader_clone = BytesReader::new(reader.extract_remaining_bytes());
         if let Ok(rtcp_header) = RtcpHeader::unmarshal(&mut reader_clone) {
             match rtcp_header.payload_type {
                 RTCP_SR => {
