@@ -19,6 +19,7 @@ use super::rtsp_transport::RtspTransport;
 use crate::rtp::utils::Marshal;
 use crate::rtp::utils::Unmarshal;
 use bytesio::bytes_reader::BytesReader;
+use rand::Rng;
 
 trait Track {
     fn create_packer_unpacker(&mut self);
@@ -48,10 +49,13 @@ pub struct RtspTrack {
 
 impl RtspTrack {
     pub fn new(track_type: TrackType, codec_info: RtspCodecInfo, media_control: String) -> Self {
+        let ssrc: u32 = rand::thread_rng().gen();
+
         let mut rtsp_track = RtspTrack {
             track_type,
             codec_info,
             media_control,
+            ssrc,
             ..Default::default()
         };
         rtsp_track.create_packer_unpacker();
@@ -69,7 +73,7 @@ impl RtspTrack {
     }
 
     pub fn on_rtcp(&mut self, reader: &mut BytesReader) {
-        let mut reader_clone = BytesReader::new(reader.extract_remaining_bytes());
+        let mut reader_clone = BytesReader::new(reader.get_remaining_bytes());
         if let Ok(rtcp_header) = RtcpHeader::unmarshal(&mut reader_clone) {
             match rtcp_header.payload_type {
                 RTCP_SR => {

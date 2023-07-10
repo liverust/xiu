@@ -8,9 +8,9 @@ use {
     crate::notify::Notifier,
     define::{
         AvStatisticSender, ClientEvent, ClientEventConsumer, ClientEventProducer, FrameData,
-        FrameDataReceiver, FrameDataSender, PubSubInfo, StreamHubEvent, StreamHubEventReceiver,
-        StreamHubEventSender, StreamStatisticSizeSender, SubscriberInfo, TStreamHandler,
-        TransmitterEvent, TransmitterEventConsumer, TransmitterEventProducer,
+        FrameDataReceiver, FrameDataSender, Information, PubSubInfo, StreamHubEvent,
+        StreamHubEventReceiver, StreamHubEventSender, StreamStatisticSizeSender, SubscriberInfo,
+        TStreamHandler, TransmitterEvent, TransmitterEventConsumer, TransmitterEventProducer,
     },
     errors::{ChannelError, ChannelErrorValue},
     std::collections::HashMap,
@@ -70,6 +70,9 @@ impl Transmitter {
                                         log::info!("Transmitter send avstatistic data err: {}", err);
                                     }
                                 }
+                            }
+                            TransmitterEvent::Request {sender} =>{
+                                self.stream_handler.send_information(sender).await;
                             }
                         }
                     }
@@ -279,8 +282,28 @@ impl StreamsHub {
                         notifier.on_unpublish_notify(event_serialize_str).await;
                     }
                 }
+                StreamHubEvent::Request { identifier, sender } => {
+                    if let Err(err) = self.request(&identifier, sender) {
+                        log::error!("event_loop request error: {}", err);
+                    }
+                }
             }
         }
+    }
+
+    fn request(
+        &mut self,
+        identifier: &StreamIdentifier,
+        sender: mpsc::UnboundedSender<Information>,
+    ) -> Result<(), ChannelError> {
+        if let Some(producer) = self.streams.get_mut(identifier) {
+            let event = TransmitterEvent::Request { sender };
+            log::info!("Request:  stream identifier: {}", identifier);
+            producer.send(event).map_err(|_| ChannelError {
+                value: ChannelErrorValue::SendError,
+            })?;
+        }
+        Ok(())
     }
 
     fn api_statistic(

@@ -33,6 +33,7 @@ impl RtpH265Packer {
                 payload_type,
                 seq_number: init_seq,
                 ssrc,
+                version: 2,
                 ..Default::default()
             },
             mtu,

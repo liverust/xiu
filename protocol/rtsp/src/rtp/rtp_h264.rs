@@ -31,6 +31,7 @@ impl RtpH264Packer {
                 payload_type,
                 seq_number: init_seq,
                 ssrc,
+                version: 2,
                 ..Default::default()
             },
             mtu,
@@ -66,7 +67,7 @@ impl RtpH264Packer {
 
             let packet_bytesmut = packet.marshal()?;
             if let Some(f) = &self.on_packet_handler {
-                f(packet_bytesmut).await;
+                f(packet_bytesmut).await?;
             }
 
             left_nalu_bytes = nalu_reader.len();
@@ -173,7 +174,7 @@ impl RtpH264UnPacker {
             f(FrameData::Video {
                 timestamp: self.timestamp,
                 data: payload,
-            });
+            })?;
         }
         return Ok(());
     }

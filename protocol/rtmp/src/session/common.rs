@@ -20,8 +20,9 @@ use {
     std::{net::SocketAddr, sync::Arc},
     streamhub::{
         define::{
-            FrameData, FrameDataReceiver, FrameDataSender, NotifyInfo, PublishType, PublisherInfo,
-            StreamHubEvent, StreamHubEventSender, SubscribeType, SubscriberInfo, TStreamHandler,
+            FrameData, FrameDataReceiver, FrameDataSender, InformationSender, NotifyInfo,
+            PublishType, PublisherInfo, StreamHubEvent, StreamHubEventSender, SubscribeType,
+            SubscriberInfo, TStreamHandler,
         },
         errors::{ChannelError, ChannelErrorValue},
         statistics::StreamStatistics,
@@ -536,6 +537,8 @@ impl TStreamHandler for RtmpStreamHandler {
 
         None
     }
+
+    async fn send_information(&self, sender: InformationSender) {}
 }
 
 impl fmt::Debug for Common {

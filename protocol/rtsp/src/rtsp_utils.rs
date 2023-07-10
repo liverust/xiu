@@ -11,7 +11,9 @@ pub(crate) use scanf;
 
 pub fn gen_random_string(size: usize) -> String {
     let mut rng = rand::thread_rng();
-    (0..size).map(|_| rng.gen_range(0, 9).to_string()).collect()
+    (0..size)
+        .map(|_| rng.gen_range(0..=9).to_string())
+        .collect()
 }
 #[cfg(test)]
 mod tests {

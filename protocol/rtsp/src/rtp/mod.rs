@@ -57,7 +57,9 @@ impl Unmarshal<&mut BytesReader, Result<Self, BytesReadError>> for RtpPacket {
             rtp_packet
                 .payload
                 .put(reader.read_bytes(reader.len() - padding_length)?);
-            rtp_packet.padding.put(reader.extract_remaining_bytes());
+            rtp_packet.padding.put(reader.read_bytes(padding_length)?);
+        } else {
+            rtp_packet.payload.put(reader.extract_remaining_bytes());
         }
 
         Ok(rtp_packet)
@@ -71,12 +73,16 @@ impl Marshal<Result<BytesMut, BytesWriteError>> for RtpPacket {
         let header_bytesmut = self.header.marshal()?;
         writer.write(&header_bytesmut[..])?;
 
-        writer.write_u16::<BigEndian>(self.header_extension_profile)?;
-        writer.write_u16::<BigEndian>(self.header_extension_length)?;
-        writer.write(&self.header_extension_payload[..])?;
+        if self.header.extension_flag == 1 {
+            writer.write_u16::<BigEndian>(self.header_extension_profile)?;
+            writer.write_u16::<BigEndian>(self.header_extension_length)?;
+            writer.write(&self.header_extension_payload[..])?;
+        }
 
         writer.write(&self.payload[..])?;
-        writer.write(&self.padding[..])?;
+        if self.header.padding_flag == 1 {
+            writer.write(&self.padding[..])?;
+        }
 
         Ok(writer.extract_current_bytes())
     }

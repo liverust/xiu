@@ -56,7 +56,7 @@ a=fmtp:97 profile-level-id=42C01E;packetization-mode=1;sprop-parameter-sets=Z0LA
 a=control:track1
 m=audio 11704 RTP/AVP 96 97 98 0 8 18 101 99 100 */
 
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Clone)]
 pub struct SdpMediaInfo {
     pub media_type: String,
     port: usize,
@@ -83,7 +83,7 @@ pub struct SdpMediaInfo {
 //     }
 // }
 
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Clone)]
 pub struct Sdp {
     raw_string: String,
     version: u16,

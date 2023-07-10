@@ -99,8 +99,17 @@ pub enum FrameData {
     MetaData { timestamp: u32, data: BytesMut },
 }
 
+//used to save data which needs to be transferred between client/server sessions
+#[derive(Clone)]
+pub enum Information {
+    Sdp { data: String },
+}
+
 pub type FrameDataSender = mpsc::UnboundedSender<FrameData>;
 pub type FrameDataReceiver = mpsc::UnboundedReceiver<FrameData>;
+
+pub type InformationSender = mpsc::UnboundedSender<Information>;
+pub type InformationReceiver = mpsc::UnboundedReceiver<Information>;
 
 pub type StreamHubEventSender = mpsc::UnboundedSender<StreamHubEvent>;
 pub type StreamHubEventReceiver = mpsc::UnboundedReceiver<StreamHubEvent>;
@@ -125,6 +134,7 @@ pub trait TStreamHandler: Send + Sync {
         sub_type: SubscribeType,
     ) -> Result<(), ChannelError>;
     async fn get_statistic_data(&self) -> Option<StreamStatistics>;
+    async fn send_information(&self, sender: InformationSender);
 }
 
 #[derive(Serialize)]
@@ -158,6 +168,12 @@ pub enum StreamHubEvent {
     },
     #[serde(skip_serializing)]
     ApiKickClient { id: Uuid },
+
+    #[serde(skip_serializing)]
+    Request {
+        identifier: StreamIdentifier,
+        sender: InformationSender,
+    },
 }
 
 #[derive(Debug)]
@@ -173,6 +189,9 @@ pub enum TransmitterEvent {
 
     Api {
         sender: AvStatisticSender,
+    },
+    Request {
+        sender: InformationSender,
     },
 }
 
