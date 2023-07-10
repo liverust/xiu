@@ -116,10 +116,9 @@ impl RtspServerSession {
     }
 
     pub async fn run(&mut self) -> Result<(), SessionError> {
+        let data = self.io.lock().await.read().await?;
+        self.reader.extend_from_slice(&data[..]);
         loop {
-            let data = self.io.lock().await.read().await?;
-            self.reader.extend_from_slice(&data[..]);
-
             if let Ok(data) = InterleavedBinaryData::new(&mut self.reader) {
                 match data {
                     Some(a) => {
@@ -471,8 +470,10 @@ impl RtspServerSession {
             let rtcp_identifier = v.transport.interleaved[1];
 
             if interleaved_binary_data.channel_identifier == rtp_identifier {
+                log::info!("onrtp: {}", self.reader.len());
                 v.on_rtp(&mut self.reader);
             } else if interleaved_binary_data.channel_identifier == rtcp_identifier {
+                log::info!("onrtcp: {}", self.reader.len());
                 v.on_rtcp(&mut self.reader);
             }
         }
