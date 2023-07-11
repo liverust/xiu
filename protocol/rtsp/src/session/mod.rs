@@ -350,67 +350,17 @@ impl RtspServerSession {
     async fn handle_play(&mut self, rtsp_request: &RtspRequest) -> Result<(), SessionError> {
         for (t, track) in &mut self.tracks {
             if let Some(packer) = &mut track.rtp_packer {
-                let io_out = Arc::clone(&self.io);
                 let channel_identifer = track.transport.interleaved[0];
-                let ty = t.clone();
-
-                // let writer=  packer.get_writer();
-
-                // packer.on_packet_handler(Box::new(
-                //     move |writer: Arc<Mutex<AsyncBytesWriter>>, msg: BytesMut| {
-                //         let io_in = io_out.clone();
-                //         Box::pin(async move {
-                //             let mut writer = AsyncBytesWriter::new(io_in);
-                //             writer.write_u8(0x24)?;
-                //             writer.write_u8(channel_identifer)?;
-                //             writer.write_u16::<BigEndian>(msg.len() as u16)?;
-                //             writer.write(&msg)?;
-                //             writer.flush().await?;
-
-                //             Ok(())
-                //         })
-                //     },
-                // ));
 
                 packer.on_packet_handler(Box::new(
                     move |writer: Arc<Mutex<AsyncBytesWriter>>, msg: BytesMut| {
-                        // let io_in = io_out.clone();
-                        let ty_in = ty.clone();
-
-                        // let writer_clone = writer.clone();
-
                         Box::pin(async move {
-                            let mut seq_number: u16 = 0;
-                            // match ty_in {
-                            //     TrackType::Video => {
-                            //         let msg_clone = msg.clone();
-                            //         if let Ok(packet) =
-                            //             RtpPacket::unmarshal(&mut BytesReader::new(msg_clone))
-                            //         {
-                            //             log::info!(
-                            //                 "packet seq number: {}",
-                            //                 packet.header.seq_number
-                            //             );
-                            //             seq_number = packet.header.seq_number;
-                            //         }
-                            //     }
-                            //     _ => {}
-                            // }
-                            // let writer = packer.get_writer();
-
                             let mut writer_guard = writer.lock().await;
                             writer_guard.write_u8(0x24)?;
                             writer_guard.write_u8(channel_identifer)?;
                             writer_guard.write_u16::<BigEndian>(msg.len() as u16)?;
                             writer_guard.write(&msg)?;
                             writer_guard.flush().await?;
-
-                            // match ty_in {
-                            //     TrackType::Video => {
-                            //         log::info!("packet seq number: {}", seq_number);
-                            //     }
-                            //     _ => {}
-                            // }
 
                             Ok(())
                         })

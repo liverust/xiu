@@ -126,7 +126,6 @@ impl TPacker for RtpH264Packer {
 #[async_trait]
 impl TRtpPacker for RtpH264Packer {
     async fn pack_nalu(&mut self, nalu: BytesMut) -> Result<(), PackerError> {
-        log::info!("nalu length: {}", nalu.len());
         if nalu.len() + define::RTP_FIXED_HEADER_LEN <= self.mtu {
             self.pack_single(nalu).await?;
         } else {
@@ -153,6 +152,11 @@ impl TUnPacker for RtpH264UnPacker {
         self.sequence_number = rtp_packet.header.seq_number;
 
         if let Some(packet_type) = rtp_packet.payload.get(0) {
+            let t = *packet_type & 0x1F;
+            if t != 1 && t != 28 {
+                log::info!("type: {}", *packet_type & 0x1F);
+            }
+
             match *packet_type & 0x1F {
                 1..=23 => {
                     return self.unpack_single(rtp_packet.payload.clone(), *packet_type);
@@ -189,9 +193,13 @@ impl RtpH264UnPacker {
         t: define::RtpNalType,
     ) -> Result<(), UnPackerError> {
         if let Some(f) = &self.on_frame_handler {
+            let mut annexb_payload = BytesMut::new();
+            annexb_payload.extend_from_slice(&define::ANNEXB_NALU_START_CODE);
+            annexb_payload.put(payload);
+
             f(FrameData::Video {
                 timestamp: self.timestamp,
-                data: payload,
+                data: annexb_payload,
             })?;
         }
         return Ok(());

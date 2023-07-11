@@ -1,11 +1,15 @@
 use crate::global_trait::Marshal;
 use crate::global_trait::Unmarshal;
+use crate::rtsp_utils;
 use indexmap::IndexMap;
 
 #[derive(Debug, Clone, Default)]
 pub struct RtspRequest {
     pub method: String,
     pub url: String,
+    //url = "rtsp://{}:{}/{}", address, port, path
+    pub address: String,
+    pub port: u16,
     pub path: String,
     pub version: String,
     pub headers: IndexMap<String, String>,
@@ -37,6 +41,19 @@ impl Unmarshal for RtspRequest {
                         if let Some(index) = url[7..].find('/') {
                             let path = &url[7 + index + 1..];
                             rtsp_request.path = String::from(path);
+                            let address_with_port = &url[7..7 + index];
+
+                            let (address_val, port_val) =
+                                rtsp_utils::scanf!(address_with_port, ':', String, u16);
+
+                            if let Some(address) = address_val {
+                                rtsp_request.address = address;
+                            }
+                            if let Some(port) = port_val {
+                                rtsp_request.port = port;
+                            }
+
+                            print!("address_with_port: {}", address_with_port);
                         }
                     }
                 }
@@ -240,7 +257,7 @@ mod tests {
 
     #[test]
     fn test_parse_rtsp_request() {
-        let data1 = "SETUP rtsp://127.0.0.1:5544/stream/streamid=0 RTSP/1.0\r\n\
+        let data1 = "SETUP rtsp://127.0.0.1/stream/streamid=0 RTSP/1.0\r\n\
         Transport: RTP/AVP/TCP;unicast;interleaved=0-1;mode=record\r\n\
         CSeq: 3\r\n\
         User-Agent: Lavf58.76.100\r\n\
@@ -253,7 +270,7 @@ mod tests {
             assert_eq!(data1, marshal_result);
         }
 
-        let data2 = "ANNOUNCE rtsp://127.0.0.1:5544/stream RTSP/1.0\r\n\
+        let data2 = "ANNOUNCE rtsp://127.0.0.1/stream RTSP/1.0\r\n\
         Content-Type: application/sdp\r\n\
         CSeq: 2\r\n\
         User-Agent: Lavf58.76.100\r\n\
