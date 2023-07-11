@@ -16,29 +16,41 @@ use bytes::{BufMut, BytesMut};
 
 use bytesio::bytes_reader::BytesReader;
 
+use bytesio::bytes_writer::AsyncBytesWriter;
+use bytesio::bytesio::BytesIO;
+use std::sync::Arc;
 use streamhub::define::FrameData;
+use tokio::sync::Mutex;
 
 // pub type OnPacketFn = fn(BytesMut) -> Result<(), PackerError>;
 
-#[derive(Default)]
 pub struct RtpAacPacker {
     header: RtpHeader,
     mtu: usize,
     on_packet_handler: Option<OnPacketFn>,
+    writer: Arc<Mutex<AsyncBytesWriter>>,
 }
 
 impl RtpAacPacker {
-    pub fn new(payload_type: u8, ssrc: u32, init_seq: u16, mtu: usize) -> Self {
+    pub fn new(
+        payload_type: u8,
+        ssrc: u32,
+        init_seq: u16,
+        mtu: usize,
+        writer: Arc<Mutex<AsyncBytesWriter>>,
+    ) -> Self {
         RtpAacPacker {
             header: RtpHeader {
                 payload_type,
                 seq_number: init_seq,
                 ssrc,
                 version: 2,
+                marker: 1,
                 ..Default::default()
             },
             mtu,
-            ..Default::default()
+            writer,
+            on_packet_handler: None,
         }
     }
 }
@@ -56,7 +68,7 @@ impl TPacker for RtpAacPacker {
 
         let packet_data = packet.marshal()?;
         if let Some(f) = &self.on_packet_handler {
-            f(packet_data).await;
+            f(self.writer.clone(), packet_data).await?;
         }
 
         self.header.seq_number += 1;

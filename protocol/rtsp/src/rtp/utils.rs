@@ -4,10 +4,13 @@ use super::errors::UnPackerError;
 use async_trait::async_trait;
 use bytes::BytesMut;
 use bytesio::bytes_reader::BytesReader;
+use bytesio::bytes_writer::AsyncBytesWriter;
 use std::future::Future;
 use std::pin::Pin;
+use std::sync::Arc;
 use std::time::SystemTime;
 use streamhub::define::FrameData;
+use tokio::sync::Mutex;
 
 pub trait Unmarshal<T1, T2> {
     fn unmarshal(data: T1) -> T2
@@ -34,7 +37,10 @@ pub type OnFrameFn = Box<dyn Fn(FrameData) -> Result<(), UnPackerError> + Send +
 //pub type OnPacketAsyncFn = Box<dyn Fn(BytesMut) -> futures::future::BoxFuture<'static, Result<(), Box<dyn std::error::Error + Send>>> + Send>;
 
 pub type OnPacketFn = Box<
-    dyn Fn(BytesMut) -> Pin<Box<dyn Future<Output = Result<(), PackerError>> + Send + 'static>>
+    dyn Fn(
+            Arc<Mutex<AsyncBytesWriter>>,
+            BytesMut,
+        ) -> Pin<Box<dyn Future<Output = Result<(), PackerError>> + Send + 'static>>
         + Send
         + Sync,
 >; //fn(BytesMut) -> Result<(), PackerError>;

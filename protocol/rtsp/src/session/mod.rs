@@ -25,6 +25,8 @@ use streamhub::define::Information;
 
 use super::http::parser::RtspRequest;
 use super::rtp::errors::UnPackerError;
+use super::rtp::utils::Unmarshal as RtpUnmarshal;
+use super::rtp::RtpPacket;
 use super::sdp::Sdp;
 
 use async_trait::async_trait;
@@ -118,12 +120,12 @@ impl RtspServerSession {
 
     pub async fn run(&mut self) -> Result<(), SessionError> {
         loop {
-            if self.reader.len() < 4 {
+            while self.reader.len() < 4 {
                 let data = self.io.lock().await.read().await?;
                 self.reader.extend_from_slice(&data[..]);
             }
 
-            log::debug!("read length========= :{}", self.reader.len());
+            // log::info!("read length========= :{}", self.reader.len());
 
             if let Ok(data) = InterleavedBinaryData::new(&mut self.reader) {
                 match data {
@@ -135,12 +137,13 @@ impl RtspServerSession {
                         self.on_rtp_over_rtsp_message(a)?;
                     }
                     None => {
+                        //log::info!("read length 2========= :{}", self.reader.len());
                         self.on_rtsp_message().await?;
                     }
                 }
             }
 
-            log::debug!("left bytes: {}", self.reader.len());
+            //log::info!("left bytes: {}", self.reader.len());
         }
     }
 
@@ -345,24 +348,74 @@ impl RtspServerSession {
     }
 
     async fn handle_play(&mut self, rtsp_request: &RtspRequest) -> Result<(), SessionError> {
-        for (_, track) in &mut self.tracks {
+        for (t, track) in &mut self.tracks {
             if let Some(packer) = &mut track.rtp_packer {
                 let io_out = Arc::clone(&self.io);
                 let channel_identifer = track.transport.interleaved[0];
+                let ty = t.clone();
 
-                packer.on_packet_handler(Box::new(move |msg: BytesMut| {
-                    let io_in = io_out.clone();
-                    Box::pin(async move {
-                        let mut writer = AsyncBytesWriter::new(io_in);
-                        writer.write_u8(0x24)?;
-                        writer.write_u8(channel_identifer)?;
-                        writer.write_u16::<BigEndian>(msg.len() as u16)?;
-                        writer.write(&msg)?;
-                        writer.flush().await?;
+                // let writer=  packer.get_writer();
 
-                        Ok(())
-                    })
-                }));
+                // packer.on_packet_handler(Box::new(
+                //     move |writer: Arc<Mutex<AsyncBytesWriter>>, msg: BytesMut| {
+                //         let io_in = io_out.clone();
+                //         Box::pin(async move {
+                //             let mut writer = AsyncBytesWriter::new(io_in);
+                //             writer.write_u8(0x24)?;
+                //             writer.write_u8(channel_identifer)?;
+                //             writer.write_u16::<BigEndian>(msg.len() as u16)?;
+                //             writer.write(&msg)?;
+                //             writer.flush().await?;
+
+                //             Ok(())
+                //         })
+                //     },
+                // ));
+
+                packer.on_packet_handler(Box::new(
+                    move |writer: Arc<Mutex<AsyncBytesWriter>>, msg: BytesMut| {
+                        // let io_in = io_out.clone();
+                        let ty_in = ty.clone();
+
+                        // let writer_clone = writer.clone();
+
+                        Box::pin(async move {
+                            let mut seq_number: u16 = 0;
+                            // match ty_in {
+                            //     TrackType::Video => {
+                            //         let msg_clone = msg.clone();
+                            //         if let Ok(packet) =
+                            //             RtpPacket::unmarshal(&mut BytesReader::new(msg_clone))
+                            //         {
+                            //             log::info!(
+                            //                 "packet seq number: {}",
+                            //                 packet.header.seq_number
+                            //             );
+                            //             seq_number = packet.header.seq_number;
+                            //         }
+                            //     }
+                            //     _ => {}
+                            // }
+                            // let writer = packer.get_writer();
+
+                            let mut writer_guard = writer.lock().await;
+                            writer_guard.write_u8(0x24)?;
+                            writer_guard.write_u8(channel_identifer)?;
+                            writer_guard.write_u16::<BigEndian>(msg.len() as u16)?;
+                            writer_guard.write(&msg)?;
+                            writer_guard.flush().await?;
+
+                            // match ty_in {
+                            //     TrackType::Video => {
+                            //         log::info!("packet seq number: {}", seq_number);
+                            //     }
+                            //     _ => {}
+                            // }
+
+                            Ok(())
+                        })
+                    },
+                ));
             }
         }
 
@@ -398,7 +451,6 @@ impl RtspServerSession {
                     } => {
                         if let Some(audio_track) = self.tracks.get_mut(&TrackType::Audio) {
                             if let Some(packer) = &mut audio_track.rtp_packer {
-                                log::info!("audio data 1: {}", timestamp);
                                 packer.pack(&mut data, timestamp).await?;
                             }
                         }
@@ -440,6 +492,8 @@ impl RtspServerSession {
     }
 
     fn new_tracks(&mut self) -> Result<(), SessionError> {
+        let writer = Arc::new(Mutex::new(AsyncBytesWriter::new(self.io.clone())));
+
         for media in &self.sdp.medias {
             let media_control = if let Some(media_control_val) = media.attributes.get("control") {
                 media_control_val.clone()
@@ -464,7 +518,8 @@ impl RtspServerSession {
 
                     log::info!("audio codec info: {:?}", codec_info);
 
-                    let track = RtspTrack::new(TrackType::Audio, codec_info, media_control);
+                    let track =
+                        RtspTrack::new(TrackType::Audio, codec_info, media_control, writer.clone());
                     self.tracks.insert(TrackType::Audio, track);
                 }
                 "video" => {
@@ -478,7 +533,8 @@ impl RtspServerSession {
                         sample_rate: media.rtpmap.clock_rate,
                         ..Default::default()
                     };
-                    let track = RtspTrack::new(TrackType::Video, codec_info, media_control);
+                    let track =
+                        RtspTrack::new(TrackType::Video, codec_info, media_control, writer.clone());
                     self.tracks.insert(TrackType::Video, track);
                 }
                 _ => {}

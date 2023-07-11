@@ -17,17 +17,27 @@ use async_trait::async_trait;
 use byteorder::BigEndian;
 use bytes::{BufMut, BytesMut};
 use bytesio::bytes_reader::BytesReader;
+use bytesio::bytes_writer::AsyncBytesWriter;
+use bytesio::bytesio::BytesIO;
+use std::sync::Arc;
 use streamhub::define::FrameData;
+use tokio::sync::Mutex;
 
-#[derive(Default)]
 pub struct RtpH265Packer {
     header: RtpHeader,
     mtu: usize,
+    writer: Arc<Mutex<AsyncBytesWriter>>,
     on_packet_handler: Option<OnPacketFn>,
 }
 
 impl RtpH265Packer {
-    pub fn new(payload_type: u8, ssrc: u32, init_seq: u16, mtu: usize) -> Self {
+    pub fn new(
+        payload_type: u8,
+        ssrc: u32,
+        init_seq: u16,
+        mtu: usize,
+        writer: Arc<Mutex<AsyncBytesWriter>>,
+    ) -> Self {
         RtpH265Packer {
             header: RtpHeader {
                 payload_type,
@@ -37,7 +47,8 @@ impl RtpH265Packer {
                 ..Default::default()
             },
             mtu,
-            ..Default::default()
+            writer,
+            on_packet_handler: None,
         }
     }
 
@@ -94,7 +105,7 @@ impl RtpH265Packer {
 
             let packet_bytesmut = packet.marshal()?;
             if let Some(f) = &self.on_packet_handler {
-                f(packet_bytesmut).await?;
+                f(self.writer.clone(), packet_bytesmut).await?;
             }
             left_nalu_bytes = nalu_reader.len();
             self.header.seq_number += 1;
@@ -111,7 +122,7 @@ impl RtpH265Packer {
         self.header.seq_number += 1;
 
         if let Some(f) = &self.on_packet_handler {
-            return f(packet_bytesmut).await;
+            return f(self.writer.clone(), packet_bytesmut).await;
         }
         Ok(())
     }
