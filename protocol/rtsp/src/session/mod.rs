@@ -398,6 +398,7 @@ impl RtspServerSession {
                     } => {
                         if let Some(audio_track) = self.tracks.get_mut(&TrackType::Audio) {
                             if let Some(packer) = &mut audio_track.rtp_packer {
+                                log::info!("audio data 1: {}", timestamp);
                                 packer.pack(&mut data, timestamp).await?;
                             }
                         }
@@ -460,6 +461,8 @@ impl RtspServerSession {
                         sample_rate: media.rtpmap.clock_rate,
                         channel_count: media.rtpmap.encoding_param.parse().unwrap(),
                     };
+
+                    log::info!("audio codec info: {:?}", codec_info);
 
                     let track = RtspTrack::new(TrackType::Audio, codec_info, media_control);
                     self.tracks.insert(TrackType::Audio, track);

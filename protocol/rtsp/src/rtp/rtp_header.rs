@@ -71,7 +71,6 @@ impl Marshal<Result<BytesMut, BytesWriteError>> for RtpHeader {
             | (self.extension_flag << 4)
             | (self.cc & 0x0F);
         writer.write_u8(byte_1st)?;
-        log::info!("first byte: {}", byte_1st);
 
         let byte_2nd: u8 = (self.marker << 7) | self.payload_type;
         writer.write_u8(byte_2nd)?;

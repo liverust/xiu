@@ -34,6 +34,7 @@ impl RtpAacPacker {
                 payload_type,
                 seq_number: init_seq,
                 ssrc,
+                version: 2,
                 ..Default::default()
             },
             mtu,
@@ -100,22 +101,31 @@ impl TUnPacker for RtpAacUnPacker {
     fn unpack(&mut self, reader: &mut BytesReader) -> Result<(), UnPackerError> {
         let mut rtp_packet = RtpPacket::unmarshal(reader)?;
 
-        let au_headers_length = (reader.read_u16::<BigEndian>()? + 7) / 8;
+        let mut reader_payload = BytesReader::new(rtp_packet.payload);
+
+        let au_headers_length = (reader_payload.read_u16::<BigEndian>()? + 7) / 8;
         let au_header_length = 2;
         let aus_number = au_headers_length / au_header_length;
 
         let mut au_lengths = Vec::new();
         for _ in 0..aus_number {
-            let au_length =
-                (((reader.read_u8()? as u16) << 8) | ((reader.read_u8()? as u16) & 0xF8)) as usize;
+            let au_length = (((reader_payload.read_u8()? as u16) << 8)
+                | ((reader_payload.read_u8()? as u16) & 0xF8)) as usize;
             au_lengths.push(au_length / 8);
         }
 
+        // log::info!(
+        //     "send audio : au_headers_length :{}, aus_number: {}, au_lengths: {:?}",
+        //     au_headers_length,
+        //     aus_number,
+        //     au_lengths,
+        // );
+
         for au_length in au_lengths {
-            let au_data = reader.read_bytes(au_length)?;
+            let au_data = reader_payload.read_bytes(au_length)?;
             if let Some(f) = &self.on_frame_handler {
-                f(FrameData::Video {
-                    timestamp: self.timestamp,
+                f(FrameData::Audio {
+                    timestamp: rtp_packet.header.timestamp,
                     data: au_data,
                 });
             }

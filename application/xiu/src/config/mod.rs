@@ -164,17 +164,17 @@ fn test_toml_parse() {
     //     Err(err) => print!("{}\n", err),
     // }
 
-    let str = fs::read_to_string("/Users/zexu/github/xiu/application/src/config/config.toml");
+    let str = fs::read_to_string("/Users/zexu/github/xiu_live_rust/application/xiu/src/config/config.toml");
 
     match str {
         Ok(val) => {
             println!("++++++{val}\n");
             let decoded: Config = toml::from_str(&val[..]).unwrap();
 
-            let rtmp = decoded.rtmp;
+            let rtmp = decoded.httpnotify;
 
             if let Some(val) = rtmp {
-                println!("++++++{}\n", val.enabled);
+                println!("++++++{:?}\n", val);
             }
         }
         Err(err) => println!("======{err}"),
