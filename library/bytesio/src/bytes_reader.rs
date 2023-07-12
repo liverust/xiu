@@ -1,7 +1,7 @@
 use {
     super::{
         bytes_errors::{BytesReadError, BytesReadErrorValue},
-        bytesio::BytesIO,
+        bytesio::TNetIO,
     },
     byteorder::{ByteOrder, ReadBytesExt},
     bytes::{BufMut, BytesMut},
@@ -141,13 +141,16 @@ impl BytesReader {
         self.buffer.clone()
     }
 }
-pub struct AsyncBytesReader {
+pub struct AsyncBytesReader<T1: TNetIO> {
     pub bytes_reader: BytesReader,
-    pub io: Arc<Mutex<BytesIO>>,
+    pub io: Arc<Mutex<T1>>,
 }
 
-impl AsyncBytesReader {
-    pub fn new(io: Arc<Mutex<BytesIO>>) -> Self {
+impl<T1> AsyncBytesReader<T1>
+where
+    T1: TNetIO,
+{
+    pub fn new(io: Arc<Mutex<T1>>) -> Self {
         Self {
             bytes_reader: BytesReader::new(BytesMut::default()),
             io,

@@ -17,7 +17,7 @@ use bytes::{BufMut, BytesMut};
 use bytesio::bytes_reader::BytesReader;
 
 use bytesio::bytes_writer::AsyncBytesWriter;
-use bytesio::bytesio::BytesIO;
+use bytesio::bytesio::TNetIO;
 use std::sync::Arc;
 use streamhub::define::FrameData;
 use tokio::sync::Mutex;
@@ -28,7 +28,7 @@ pub struct RtpAacPacker {
     header: RtpHeader,
     mtu: usize,
     on_packet_handler: Option<OnPacketFn>,
-    writer: Arc<Mutex<AsyncBytesWriter>>,
+    io: Arc<Mutex<Box<dyn TNetIO + Send + Sync>>>,
 }
 
 impl RtpAacPacker {
@@ -37,7 +37,7 @@ impl RtpAacPacker {
         ssrc: u32,
         init_seq: u16,
         mtu: usize,
-        writer: Arc<Mutex<AsyncBytesWriter>>,
+        io: Arc<Mutex<Box<dyn TNetIO + Send + Sync>>>,
     ) -> Self {
         RtpAacPacker {
             header: RtpHeader {
@@ -49,7 +49,7 @@ impl RtpAacPacker {
                 ..Default::default()
             },
             mtu,
-            writer,
+            io,
             on_packet_handler: None,
         }
     }
@@ -68,7 +68,7 @@ impl TPacker for RtpAacPacker {
 
         let packet_data = packet.marshal()?;
         if let Some(f) = &self.on_packet_handler {
-            f(self.writer.clone(), packet_data).await?;
+            f(self.io.clone(), packet_data).await?;
         }
 
         self.header.seq_number += 1;
@@ -139,7 +139,7 @@ impl TUnPacker for RtpAacUnPacker {
                 f(FrameData::Audio {
                     timestamp: rtp_packet.header.timestamp,
                     data: au_data,
-                });
+                })?;
             }
         }
 

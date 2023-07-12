@@ -5,6 +5,7 @@ use async_trait::async_trait;
 use bytes::BytesMut;
 use bytesio::bytes_reader::BytesReader;
 use bytesio::bytes_writer::AsyncBytesWriter;
+use bytesio::bytesio::TNetIO;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
@@ -38,7 +39,7 @@ pub type OnFrameFn = Box<dyn Fn(FrameData) -> Result<(), UnPackerError> + Send +
 
 pub type OnPacketFn = Box<
     dyn Fn(
-            Arc<Mutex<AsyncBytesWriter>>,
+            Arc<Mutex<Box<dyn TNetIO + Send + Sync>>>,
             BytesMut,
         ) -> Pin<Box<dyn Future<Output = Result<(), PackerError>> + Send + 'static>>
         + Send

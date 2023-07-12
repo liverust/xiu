@@ -20,13 +20,14 @@ use crate::rtp::utils::Marshal;
 use crate::rtp::utils::Unmarshal;
 use bytesio::bytes_reader::BytesReader;
 use bytesio::bytes_writer::AsyncBytesWriter;
-use bytesio::bytesio::BytesIO;
+use bytesio::bytesio::TNetIO;
 use rand::Rng;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
-trait Track {
-    fn create_packer_unpacker(&mut self, writer: Arc<Mutex<AsyncBytesWriter>>);
+pub trait Track {
+    fn create_packer(&mut self, writer: Arc<Mutex<Box<dyn TNetIO + Send + Sync>>>);
+    fn create_unpacker(&mut self);
 }
 #[derive(Debug, Clone, Default, Hash, Eq, PartialEq)]
 pub enum TrackType {
@@ -56,7 +57,7 @@ impl RtspTrack {
         track_type: TrackType,
         codec_info: RtspCodecInfo,
         media_control: String,
-        writer: Arc<Mutex<AsyncBytesWriter>>,
+        io: Arc<Mutex<Box<dyn TNetIO + Send + Sync>>>,
     ) -> Self {
         let ssrc: u32 = rand::thread_rng().gen();
 
@@ -74,7 +75,7 @@ impl RtspTrack {
             send_ctx: RtcpContext::default(),
             init_sequence: 0,
         };
-        rtsp_track.create_packer_unpacker(writer);
+        rtsp_track.create_unpacker();
         rtsp_track
     }
 
@@ -110,7 +111,21 @@ impl RtspTrack {
 }
 
 impl Track for RtspTrack {
-    fn create_packer_unpacker(&mut self, writer: Arc<Mutex<AsyncBytesWriter>>) {
+    fn create_unpacker(&mut self) {
+        match self.codec_info.codec_id {
+            RtspCodecId::H264 => {
+                self.rtp_unpacker = Some(Box::new(RtpH264UnPacker::default()));
+            }
+            RtspCodecId::H265 => {
+                self.rtp_unpacker = Some(Box::new(RtpH265UnPacker::default()));
+            }
+            RtspCodecId::AAC => {
+                self.rtp_unpacker = Some(Box::new(RtpAacUnPacker::default()));
+            }
+            RtspCodecId::G711A => {}
+        }
+    }
+    fn create_packer(&mut self, io: Arc<Mutex<Box<dyn TNetIO + Send + Sync>>>) {
         match self.codec_info.codec_id {
             RtspCodecId::H264 => {
                 self.rtp_packer = Some(Box::new(RtpH264Packer::new(
@@ -118,9 +133,8 @@ impl Track for RtspTrack {
                     self.ssrc,
                     self.init_sequence,
                     1400,
-                    writer,
+                    io,
                 )));
-                self.rtp_unpacker = Some(Box::new(RtpH264UnPacker::default()));
             }
             RtspCodecId::H265 => {
                 self.rtp_packer = Some(Box::new(RtpH265Packer::new(
@@ -128,9 +142,8 @@ impl Track for RtspTrack {
                     self.ssrc,
                     self.init_sequence,
                     1400,
-                    writer,
+                    io,
                 )));
-                self.rtp_unpacker = Some(Box::new(RtpH265UnPacker::default()));
             }
             RtspCodecId::AAC => {
                 self.rtp_packer = Some(Box::new(RtpAacPacker::new(
@@ -138,9 +151,8 @@ impl Track for RtspTrack {
                     self.ssrc,
                     self.init_sequence,
                     1400,
-                    writer,
+                    io,
                 )));
-                self.rtp_unpacker = Some(Box::new(RtpAacUnPacker::default()));
             }
             RtspCodecId::G711A => {}
         }

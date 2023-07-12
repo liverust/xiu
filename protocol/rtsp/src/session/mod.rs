@@ -18,6 +18,7 @@ use bytes::BytesMut;
 use bytesio::bytes_reader::BytesReader;
 use bytesio::bytes_writer::AsyncBytesWriter;
 
+use bytesio::bytesio::UdpIO;
 use errors::SessionError;
 use errors::SessionErrorValue;
 use http::StatusCode;
@@ -27,10 +28,12 @@ use super::http::parser::RtspRequest;
 use super::rtp::errors::UnPackerError;
 use super::rtp::utils::Unmarshal as RtpUnmarshal;
 use super::rtp::RtpPacket;
+use super::rtsp_track::Track;
 use super::sdp::Sdp;
 
 use async_trait::async_trait;
-use bytesio::bytesio::BytesIO;
+use bytesio::bytesio::TNetIO;
+use bytesio::bytesio::TcpIO;
 use define::rtsp_method_name;
 
 use std::collections::HashMap;
@@ -52,7 +55,7 @@ use tokio::net::TcpStream;
 use tokio::sync::Mutex;
 
 pub struct RtspServerSession {
-    io: Arc<Mutex<BytesIO>>,
+    io: Arc<Mutex<Box<dyn TNetIO + Send + Sync>>>,
     reader: BytesReader,
     writer: AsyncBytesWriter,
 
@@ -103,7 +106,8 @@ impl RtspServerSession {
             None
         };
 
-        let io = Arc::new(Mutex::new(BytesIO::new(stream)));
+        let net_io: Box<dyn TNetIO + Send + Sync> = Box::new(TcpIO::new(stream));
+        let io = Arc::new(Mutex::new(net_io));
 
         Self {
             io: io.clone(),
@@ -327,9 +331,34 @@ impl RtspServerSession {
                 }
 
                 let transport = RtspTransport::unmarshal(transport_data);
+
                 if let Some(trans) = transport {
-                    if trans.protocol_type == ProtocolType::TCP {}
+                    log::info!("get transport");
+                    match trans.protocol_type {
+                        ProtocolType::TCP => {
+                            log::info!("get transport TCP");
+                            v.create_packer(self.io.clone());
+                        }
+                        ProtocolType::UDP => {
+                            log::info!("get transport UDP");
+                            let address = rtsp_request.address.clone();
+                            let rtp_port = trans.client_port[0] as u16;
+                            let rtcp_port = trans.client_port[1];
+
+                            if let Some(udp_io) = UdpIO::new(address, rtp_port).await {
+                                let box_udp_io: Box<dyn TNetIO + Send + Sync> = Box::new(udp_io);
+                                let io = Arc::new(Mutex::new(box_udp_io));
+                                v.create_packer(io);
+                            }
+
+                            // let net_io: Box<dyn TNetIO + Send + Sync> = Box::new(TcpIO::new(se));
+                            // let io = Arc::new(Mutex::new(net_io));
+                        }
+                    }
+
                     v.set_transport(trans);
+
+                    // v.create_packer_unpacker();
                 }
 
                 response
@@ -353,14 +382,15 @@ impl RtspServerSession {
                 let channel_identifer = track.transport.interleaved[0];
 
                 packer.on_packet_handler(Box::new(
-                    move |writer: Arc<Mutex<AsyncBytesWriter>>, msg: BytesMut| {
+                    move |io: Arc<Mutex<Box<dyn TNetIO + Send + Sync>>>, msg: BytesMut| {
                         Box::pin(async move {
-                            let mut writer_guard = writer.lock().await;
-                            writer_guard.write_u8(0x24)?;
-                            writer_guard.write_u8(channel_identifer)?;
-                            writer_guard.write_u16::<BigEndian>(msg.len() as u16)?;
-                            writer_guard.write(&msg)?;
-                            writer_guard.flush().await?;
+                            let mut bytes_writer = AsyncBytesWriter::new(io);
+
+                            bytes_writer.write_u8(0x24)?;
+                            bytes_writer.write_u8(channel_identifer)?;
+                            bytes_writer.write_u16::<BigEndian>(msg.len() as u16)?;
+                            bytes_writer.write(&msg)?;
+                            bytes_writer.flush().await?;
 
                             Ok(())
                         })
@@ -442,7 +472,7 @@ impl RtspServerSession {
     }
 
     fn new_tracks(&mut self) -> Result<(), SessionError> {
-        let writer = Arc::new(Mutex::new(AsyncBytesWriter::new(self.io.clone())));
+        let writer = self.io.clone();
 
         for media in &self.sdp.medias {
             let media_control = if let Some(media_control_val) = media.attributes.get("control") {
@@ -468,8 +498,12 @@ impl RtspServerSession {
 
                     log::info!("audio codec info: {:?}", codec_info);
 
-                    let track =
-                        RtspTrack::new(TrackType::Audio, codec_info, media_control, writer.clone());
+                    let track = RtspTrack::new(
+                        TrackType::Audio,
+                        codec_info,
+                        media_control,
+                        self.io.clone(),
+                    );
                     self.tracks.insert(TrackType::Audio, track);
                 }
                 "video" => {
@@ -483,8 +517,12 @@ impl RtspServerSession {
                         sample_rate: media.rtpmap.clock_rate,
                         ..Default::default()
                     };
-                    let track =
-                        RtspTrack::new(TrackType::Video, codec_info, media_control, writer.clone());
+                    let track = RtspTrack::new(
+                        TrackType::Video,
+                        codec_info,
+                        media_control,
+                        self.io.clone(),
+                    );
                     self.tracks.insert(TrackType::Video, track);
                 }
                 _ => {}
