@@ -340,19 +340,16 @@ impl RtspServerSession {
                             v.create_packer(self.io.clone());
                         }
                         ProtocolType::UDP => {
-                            log::info!("get transport UDP");
                             let address = rtsp_request.address.clone();
                             let rtp_port = trans.client_port[0] as u16;
                             let rtcp_port = trans.client_port[1];
-
-                            if let Some(udp_io) = UdpIO::new(address, rtp_port).await {
+                            log::info!("get transport UDP : {}:{}", address, rtp_port);
+                            if let Some(udp_io) = UdpIO::new(address.clone(), rtp_port).await {
                                 let box_udp_io: Box<dyn TNetIO + Send + Sync> = Box::new(udp_io);
                                 let io = Arc::new(Mutex::new(box_udp_io));
+                                log::info!("get transport UDP : {}:{}", address, rtp_port);
                                 v.create_packer(io);
                             }
-
-                            // let net_io: Box<dyn TNetIO + Send + Sync> = Box::new(TcpIO::new(se));
-                            // let io = Arc::new(Mutex::new(net_io));
                         }
                     }
 
@@ -381,21 +378,40 @@ impl RtspServerSession {
             if let Some(packer) = &mut track.rtp_packer {
                 let channel_identifer = track.transport.interleaved[0];
 
-                packer.on_packet_handler(Box::new(
-                    move |io: Arc<Mutex<Box<dyn TNetIO + Send + Sync>>>, msg: BytesMut| {
-                        Box::pin(async move {
-                            let mut bytes_writer = AsyncBytesWriter::new(io);
+                match track.transport.protocol_type {
+                    ProtocolType::TCP => {
+                        packer.on_packet_handler(Box::new(
+                            move |io: Arc<Mutex<Box<dyn TNetIO + Send + Sync>>>, msg: BytesMut| {
+                                Box::pin(async move {
+                                    let mut bytes_writer = AsyncBytesWriter::new(io);
 
-                            bytes_writer.write_u8(0x24)?;
-                            bytes_writer.write_u8(channel_identifer)?;
-                            bytes_writer.write_u16::<BigEndian>(msg.len() as u16)?;
-                            bytes_writer.write(&msg)?;
-                            bytes_writer.flush().await?;
+                                    bytes_writer.write_u8(0x24)?;
+                                    bytes_writer.write_u8(channel_identifer)?;
+                                    bytes_writer.write_u16::<BigEndian>(msg.len() as u16)?;
 
-                            Ok(())
-                        })
-                    },
-                ));
+                                    bytes_writer.write(&msg)?;
+                                    bytes_writer.flush().await?;
+
+                                    Ok(())
+                                })
+                            },
+                        ));
+                    }
+                    ProtocolType::UDP => {
+                        packer.on_packet_handler(Box::new(
+                            move |io: Arc<Mutex<Box<dyn TNetIO + Send + Sync>>>, msg: BytesMut| {
+                                Box::pin(async move {
+                                    let mut bytes_writer = AsyncBytesWriter::new(io);
+
+                                    bytes_writer.write(&msg)?;
+                                    bytes_writer.flush().await?;
+
+                                    Ok(())
+                                })
+                            },
+                        ));
+                    }
+                }
             }
         }
 
@@ -404,8 +420,8 @@ impl RtspServerSession {
 
         self.send_response(&response).await?;
 
-        // The sender is used for sending audio/video frame data to stream hub
-        // receiver is used to passing to stream hub and receive the a/v frame data
+        // The sender is passsed to the stream hub, and using which send the a/v data from stream hub to the play session.
+        // The receiver is used for receiving and send to the remote cient side.
         let (sender, mut receiver) = mpsc::unbounded_channel();
 
         let publish_event = StreamHubEvent::Subscribe {

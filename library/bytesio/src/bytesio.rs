@@ -30,16 +30,17 @@ pub trait TNetIO: Send + Sync {
 
 pub struct UdpIO {
     socket: UdpSocket,
+    send_address: String,
 }
 
 impl UdpIO {
     pub async fn new(domain: String, port: u16) -> Option<Self> {
-        let address = format!("{}:{}", domain, port);
-
-        if let Ok(socket_addr) = address.parse::<SocketAddr>() {
-            if let Ok(socket) = UdpSocket::bind(&socket_addr).await {
-                return Some(Self { socket });
-            }
+        let send_address = format!("{}:{}", domain, port);
+        if let Ok(socket) = UdpSocket::bind("0.0.0.0:0").await {
+            return Some(Self {
+                socket,
+                send_address,
+            });
         }
         None
     }
@@ -48,7 +49,9 @@ impl UdpIO {
 #[async_trait]
 impl TNetIO for UdpIO {
     async fn write(&mut self, bytes: Bytes) -> Result<(), BytesIOError> {
-        self.socket.send(bytes.as_ref()).await?;
+        self.socket
+            .send_to(bytes.as_ref(), &self.send_address)
+            .await?;
         Ok(())
     }
 
