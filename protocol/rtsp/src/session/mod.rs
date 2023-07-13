@@ -354,8 +354,6 @@ impl RtspServerSession {
                     }
 
                     v.set_transport(trans);
-
-                    // v.create_packer_unpacker();
                 }
 
                 response
@@ -384,11 +382,9 @@ impl RtspServerSession {
                             move |io: Arc<Mutex<Box<dyn TNetIO + Send + Sync>>>, msg: BytesMut| {
                                 Box::pin(async move {
                                     let mut bytes_writer = AsyncBytesWriter::new(io);
-
                                     bytes_writer.write_u8(0x24)?;
                                     bytes_writer.write_u8(channel_identifer)?;
                                     bytes_writer.write_u16::<BigEndian>(msg.len() as u16)?;
-
                                     bytes_writer.write(&msg)?;
                                     bytes_writer.flush().await?;
 
@@ -402,7 +398,6 @@ impl RtspServerSession {
                             move |io: Arc<Mutex<Box<dyn TNetIO + Send + Sync>>>, msg: BytesMut| {
                                 Box::pin(async move {
                                     let mut bytes_writer = AsyncBytesWriter::new(io);
-
                                     bytes_writer.write(&msg)?;
                                     bytes_writer.flush().await?;
 
