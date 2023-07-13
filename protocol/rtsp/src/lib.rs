@@ -3,7 +3,7 @@ pub mod http;
 pub mod rtp;
 pub mod rtsp;
 pub mod rtsp_codec;
-pub mod rtsp_media;
+pub mod rtsp_channel;
 pub mod rtsp_range;
 pub mod rtsp_track;
 pub mod rtsp_transport;

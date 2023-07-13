@@ -22,7 +22,6 @@ use bytesio::bytesio::UdpIO;
 use errors::SessionError;
 use errors::SessionErrorValue;
 use http::StatusCode;
-use streamhub::define::Information;
 
 use super::http::parser::RtspRequest;
 use super::rtp::errors::UnPackerError;
@@ -36,6 +35,7 @@ use bytesio::bytesio::TNetIO;
 use bytesio::bytesio::TcpIO;
 use define::rtsp_method_name;
 
+use crate::rtsp_channel::TRtpFunc;
 use std::collections::HashMap;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -44,8 +44,9 @@ use uuid::Uuid;
 
 use streamhub::{
     define::{
-        FrameData, FrameDataSender, InformationSender, NotifyInfo, PublishType, PublisherInfo,
-        StreamHubEvent, StreamHubEventSender, SubscribeType, SubscriberInfo, TStreamHandler,
+        FrameData, FrameDataSender, Information, InformationSender, NotifyInfo, PublishType,
+        PublisherInfo, StreamHubEvent, StreamHubEventSender, SubscribeType, SubscriberInfo,
+        TStreamHandler,
     },
     errors::ChannelError,
     statistics::StreamStatistics,
@@ -63,7 +64,7 @@ pub struct RtspServerSession {
     //In RTP/AVP/UDP mode, we need a separate thread to process the reviced RTP AV data
     //So here we need to use the RtspTrack object in different threads, so here we add
     //Arc<Mutex>>
-    tracks: HashMap<TrackType, Arc<Mutex<RtspTrack>>>,
+    tracks: HashMap<TrackType, RtspTrack>,
     sdp: Sdp,
     pub session_id: Option<String>,
 
@@ -162,20 +163,14 @@ impl RtspServerSession {
     ) -> Result<(), SessionError> {
         let mut cur_reader = BytesReader::new(self.reader.read_bytes(length as usize)?);
 
-        for (k, v) in &mut self.tracks {
-            let mut track = v.lock().await;
+        for (k, track) in &mut self.tracks {
             let rtp_identifier = track.transport.interleaved[0];
             let rtcp_identifier = track.transport.interleaved[1];
 
             if channel_identifier == rtp_identifier {
-                log::debug!("onrtp: {}", cur_reader.len());
-
-                track.on_rtp(&mut cur_reader);
-                log::debug!("onrtp end: {}", cur_reader.len());
+                track.on_rtp(&mut cur_reader).await;
             } else if channel_identifier == rtcp_identifier {
-                log::debug!("onrtcp: {}", cur_reader.len());
-                track.on_rtcp(&mut cur_reader);
-                log::debug!("onrtcp end: {}", cur_reader.len());
+                track.on_rtcp(&mut cur_reader).await;
             }
         }
         Ok(())
@@ -269,40 +264,6 @@ impl RtspServerSession {
         Ok(())
     }
 
-    // pub async fn rtp_receive_loop(
-    //     &mut self,
-    //     io: Arc<Mutex<Box<dyn TNetIO + Send + Sync>>>,
-    //     track: Arc<Mutex<RtspTrack>>,
-    // ) {
-    //     tokio::spawn(async move {
-    //         let mut reader = BytesReader::new(BytesMut::new());
-
-    //         loop {
-    //             if let Ok(data) = io.lock().await.read().await {
-    //                 reader.extend_from_slice(&data[..]);
-    //                 track.lock().await.on_rtp(&mut reader).await;
-    //             }
-    //         }
-    //     });
-    // }
-
-    // pub async fn rtcp_receive_loop(
-    //     &mut self,
-    //     io: Arc<Mutex<Box<dyn TNetIO + Send + Sync>>>,
-    //     track: Arc<Mutex<RtspTrack>>,
-    // ) {
-    //     tokio::spawn(async move {
-    //         let mut reader = BytesReader::new(BytesMut::new());
-
-    //         loop {
-    //             if let Ok(data) = io.lock().await.read().await {
-    //                 reader.extend_from_slice(&data[..]);
-    //                 track.lock().await.on_rtcp(&mut reader)
-    //             }
-    //         }
-    //     });
-    // }
-
     async fn handle_announce(&mut self, rtsp_request: &RtspRequest) -> Result<(), SessionError> {
         if let Some(request_body) = &rtsp_request.body {
             if let Some(sdp) = Sdp::unmarshal(&request_body) {
@@ -317,19 +278,19 @@ impl RtspServerSession {
         // The sender is used for sending audio/video frame data to stream hub
         // receiver is used to passing to stream hub and receive the a/v frame data
         let (sender, receiver) = mpsc::unbounded_channel();
-        for (_, t) in &mut self.tracks {
-            let mut track = t.lock().await;
-            if let Some(unpacker) = &mut track.rtp_unpacker {
-                let sender_out = sender.clone();
-                unpacker.lock().await.on_frame_handler(Box::new(
-                    move |msg: FrameData| -> Result<(), UnPackerError> {
-                        if let Err(err) = sender_out.send(msg) {
-                            log::error!("send frame error: {}", err);
-                        }
-                        Ok(())
-                    },
-                ));
-            }
+        for (_, track) in &mut self.tracks {
+            // let track = t.lock().await;
+            let sender_out = sender.clone();
+            log::info!("on frame handler begin");
+            track.rtp_channel.lock().await.on_frame_handler(Box::new(
+                move |msg: FrameData| -> Result<(), UnPackerError> {
+                    if let Err(err) = sender_out.send(msg) {
+                        log::error!("send frame error: {}", err);
+                    }
+                    Ok(())
+                },
+            ));
+            log::info!("on frame handler end");
         }
 
         let publish_event = StreamHubEvent::Publish {
@@ -358,8 +319,7 @@ impl RtspServerSession {
         let status_code = http::StatusCode::OK;
         let mut response = Self::gen_response(status_code, &rtsp_request);
 
-        for (_, v) in &mut self.tracks {
-            let mut track = v.lock().await;
+        for (_, track) in &mut self.tracks {
             if !rtsp_request.url.contains(&track.media_control) {
                 continue;
             }
@@ -376,12 +336,13 @@ impl RtspServerSession {
                     match trans.protocol_type {
                         ProtocolType::TCP => {
                             log::info!("get transport TCP");
-                            track.create_packer(self.io.clone());
+                            track.create_packer(self.io.clone()).await;
+                            log::info!("get transport TCP ====");
                         }
                         ProtocolType::UDP => {
                             let address = rtsp_request.address.clone();
                             let rtp_port = trans.client_port[0] as u16;
-                            let rtcp_port = trans.client_port[1];
+                            let rtcp_port = trans.client_port[1] as u16;
                             log::info!("get transport UDP : {}:{}", address, rtp_port);
                             if let Some(udp_io) = UdpIO::new(address.clone(), rtp_port).await {
                                 let box_udp_io: Box<dyn TNetIO + Send + Sync> = Box::new(udp_io);
@@ -389,12 +350,21 @@ impl RtspServerSession {
                                 log::info!("get transport UDP : {}:{}", address, rtp_port);
                                 //if mode is empty then it is a player session.
                                 if trans.transport_mod.is_empty() {
-                                    track.create_packer(Arc::new(Mutex::new(box_udp_io)));
+                                    track.create_packer(Arc::new(Mutex::new(box_udp_io))).await;
                                 } else {
                                     track.rtp_receive_loop(box_udp_io).await;
                                 }
 
                                 // self.rtp_receive_loop(io, track).await
+                            }
+
+                            if let Some(udp_io) = UdpIO::new(address.clone(), rtcp_port).await {
+                                let box_udp_io: Box<dyn TNetIO + Send + Sync> = Box::new(udp_io);
+
+                                log::info!("get transport UDP : {}:{}", address, rtp_port);
+                                //if mode is empty then it is a player session.
+
+                                track.rtcp_run_loop(box_udp_io).await;
                             }
                         }
                     }
@@ -418,42 +388,42 @@ impl RtspServerSession {
     }
 
     async fn handle_play(&mut self, rtsp_request: &RtspRequest) -> Result<(), SessionError> {
-        for (t, lock_track) in &mut self.tracks {
-            let mut track = lock_track.lock().await;
+        for (t, track) in &mut self.tracks {
+            // let mut track = lock_track.lock().await;
             let channel_identifer = track.transport.interleaved[0];
             let protocol_type = track.transport.protocol_type.clone();
 
-            if let Some(packer) = &mut track.rtp_packer {
-                match protocol_type {
-                    ProtocolType::TCP => {
-                        packer.on_packet_handler(Box::new(
-                            move |io: Arc<Mutex<Box<dyn TNetIO + Send + Sync>>>, msg: BytesMut| {
-                                Box::pin(async move {
-                                    let mut bytes_writer = AsyncBytesWriter::new(io);
-                                    bytes_writer.write_u8(0x24)?;
-                                    bytes_writer.write_u8(channel_identifer)?;
-                                    bytes_writer.write_u16::<BigEndian>(msg.len() as u16)?;
-                                    bytes_writer.write(&msg)?;
-                                    bytes_writer.flush().await?;
+            match protocol_type {
+                ProtocolType::TCP => {
+                    log::info!("on packet handler begin");
+                    track.rtp_channel.lock().await.on_packet_handler(Box::new(
+                        move |io: Arc<Mutex<Box<dyn TNetIO + Send + Sync>>>, msg: BytesMut| {
+                            Box::pin(async move {
+                                let mut bytes_writer = AsyncBytesWriter::new(io);
+                                bytes_writer.write_u8(0x24)?;
+                                bytes_writer.write_u8(channel_identifer)?;
+                                bytes_writer.write_u16::<BigEndian>(msg.len() as u16)?;
+                                bytes_writer.write(&msg)?;
+                                bytes_writer.flush().await?;
 
-                                    Ok(())
-                                })
-                            },
-                        ));
-                    }
-                    ProtocolType::UDP => {
-                        packer.on_packet_handler(Box::new(
-                            move |io: Arc<Mutex<Box<dyn TNetIO + Send + Sync>>>, msg: BytesMut| {
-                                Box::pin(async move {
-                                    let mut bytes_writer = AsyncBytesWriter::new(io);
-                                    bytes_writer.write(&msg)?;
-                                    bytes_writer.flush().await?;
+                                Ok(())
+                            })
+                        },
+                    ));
+                    log::info!("on packet handler end");
+                }
+                ProtocolType::UDP => {
+                    track.rtp_channel.lock().await.on_packet_handler(Box::new(
+                        move |io: Arc<Mutex<Box<dyn TNetIO + Send + Sync>>>, msg: BytesMut| {
+                            Box::pin(async move {
+                                let mut bytes_writer = AsyncBytesWriter::new(io);
+                                bytes_writer.write(&msg)?;
+                                bytes_writer.flush().await?;
 
-                                    Ok(())
-                                })
-                            },
-                        ));
-                    }
+                                Ok(())
+                            })
+                        },
+                    ));
                 }
             }
         }
@@ -489,9 +459,12 @@ impl RtspServerSession {
                         mut data,
                     } => {
                         if let Some(audio_track) = self.tracks.get_mut(&TrackType::Audio) {
-                            if let Some(packer) = &mut audio_track.lock().await.rtp_packer {
-                                packer.pack(&mut data, timestamp).await?;
-                            }
+                            audio_track
+                                .rtp_channel
+                                .lock()
+                                .await
+                                .pack(&mut data, timestamp)
+                                .await?;
                         }
                     }
                     FrameData::Video {
@@ -499,9 +472,12 @@ impl RtspServerSession {
                         mut data,
                     } => {
                         if let Some(video_track) = self.tracks.get_mut(&TrackType::Video) {
-                            if let Some(packer) = &mut video_track.lock().await.rtp_packer {
-                                packer.pack(&mut data, timestamp).await?;
-                            }
+                            video_track
+                                .rtp_channel
+                                .lock()
+                                .await
+                                .pack(&mut data, timestamp)
+                                .await?;
                         }
                     }
                     FrameData::MetaData { timestamp, data } => {}
@@ -563,8 +539,7 @@ impl RtspServerSession {
                         media_control,
                         self.io.clone(),
                     );
-                    self.tracks
-                        .insert(TrackType::Audio, Arc::new(Mutex::new(track)));
+                    self.tracks.insert(TrackType::Audio, track);
                 }
                 "video" => {
                     let codec_id = rtsp_codec::RTSP_CODEC_NAME_2_ID
@@ -583,8 +558,7 @@ impl RtspServerSession {
                         media_control,
                         self.io.clone(),
                     );
-                    self.tracks
-                        .insert(TrackType::Video, Arc::new(Mutex::new(track)));
+                    self.tracks.insert(TrackType::Video, track);
                 }
                 _ => {}
             }
