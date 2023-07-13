@@ -4,6 +4,7 @@ use bytes::BufMut;
 use bytes::Bytes;
 use bytes::BytesMut;
 use futures::StreamExt;
+use futures::TryFutureExt;
 use tokio::io::AsyncWriteExt;
 
 use std::time::Duration;
@@ -30,18 +31,27 @@ pub trait TNetIO: Send + Sync {
 
 pub struct UdpIO {
     socket: UdpSocket,
-    send_address: String,
+    remote_address: String,
 }
 
 impl UdpIO {
-    pub async fn new(domain: String, port: u16) -> Option<Self> {
-        let send_address = format!("{}:{}", domain, port);
-        if let Ok(socket) = UdpSocket::bind("0.0.0.0:0").await {
+    pub async fn new(remote_domain: String, remote_port: u16) -> Option<Self> {
+        let remote_address = format!("{}:{}", remote_domain, remote_port);
+        if let Ok(local_socket) = UdpSocket::bind("0.0.0.0:0").await {
+            //There is no need to connect to the remote addr if we only need to send to remote;
+            //But if we need to receive data from remote udp socket, then we need to call the connect
+            //function.
+            if let Ok(remote_socket_addr) = remote_address.parse::<SocketAddr>() {
+                if let Err(err) = local_socket.connect(remote_socket_addr).await {
+                    log::info!("connect to remote udp socket error: {}", err);
+                }
+            }
             return Some(Self {
-                socket,
-                send_address,
+                socket: local_socket,
+                remote_address,
             });
         }
+
         None
     }
 }
@@ -50,7 +60,7 @@ impl UdpIO {
 impl TNetIO for UdpIO {
     async fn write(&mut self, bytes: Bytes) -> Result<(), BytesIOError> {
         self.socket
-            .send_to(bytes.as_ref(), &self.send_address)
+            .send_to(bytes.as_ref(), &self.remote_address)
             .await?;
         Ok(())
     }

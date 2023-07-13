@@ -35,8 +35,8 @@ pub type OnFrameFn = Box<dyn Fn(FrameData) -> Result<(), UnPackerError> + Send +
 //         + Sync,
 // >;
 
-//pub type OnPacketAsyncFn = Box<dyn Fn(BytesMut) -> futures::future::BoxFuture<'static, Result<(), Box<dyn std::error::Error + Send>>> + Send>;
-
+//Arc<Mutex<Box<dyn TNetIO + Send + Sync>>> : The network connection used by packer to send a/v data
+//BytesMut: The Rtp packet data that will be sent using the TNetIO
 pub type OnPacketFn = Box<
     dyn Fn(
             Arc<Mutex<Box<dyn TNetIO + Send + Sync>>>,

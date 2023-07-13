@@ -60,7 +60,10 @@ pub struct RtspServerSession {
     writer: AsyncBytesWriter,
 
     transport: RtspTransport,
-    tracks: HashMap<TrackType, RtspTrack>,
+    //In RTP/AVP/UDP mode, we need a separate thread to process the reviced RTP AV data
+    //So here we need to use the RtspTrack object in different threads, so here we add
+    //Arc<Mutex>>
+    tracks: HashMap<TrackType, Arc<Mutex<RtspTrack>>>,
     sdp: Sdp,
     pub session_id: Option<String>,
 
@@ -138,7 +141,8 @@ impl RtspServerSession {
                             let data = self.io.lock().await.read().await?;
                             self.reader.extend_from_slice(&data[..]);
                         }
-                        self.on_rtp_over_rtsp_message(a)?;
+                        self.on_rtp_over_rtsp_message(a.channel_identifier, a.length as usize)
+                            .await?;
                     }
                     None => {
                         //log::info!("read length 2========= :{}", self.reader.len());
@@ -151,27 +155,26 @@ impl RtspServerSession {
         }
     }
 
-    fn on_rtp_over_rtsp_message(
+    async fn on_rtp_over_rtsp_message(
         &mut self,
-        interleaved_binary_data: InterleavedBinaryData,
+        channel_identifier: u8,
+        length: usize,
     ) -> Result<(), SessionError> {
-        let mut cur_reader = BytesReader::new(
-            self.reader
-                .read_bytes(interleaved_binary_data.length as usize)?,
-        );
+        let mut cur_reader = BytesReader::new(self.reader.read_bytes(length as usize)?);
 
         for (k, v) in &mut self.tracks {
-            let rtp_identifier = v.transport.interleaved[0];
-            let rtcp_identifier = v.transport.interleaved[1];
+            let mut track = v.lock().await;
+            let rtp_identifier = track.transport.interleaved[0];
+            let rtcp_identifier = track.transport.interleaved[1];
 
-            if interleaved_binary_data.channel_identifier == rtp_identifier {
+            if channel_identifier == rtp_identifier {
                 log::debug!("onrtp: {}", cur_reader.len());
 
-                v.on_rtp(&mut cur_reader);
+                track.on_rtp(&mut cur_reader);
                 log::debug!("onrtp end: {}", cur_reader.len());
-            } else if interleaved_binary_data.channel_identifier == rtcp_identifier {
+            } else if channel_identifier == rtcp_identifier {
                 log::debug!("onrtcp: {}", cur_reader.len());
-                v.on_rtcp(&mut cur_reader);
+                track.on_rtcp(&mut cur_reader);
                 log::debug!("onrtcp end: {}", cur_reader.len());
             }
         }
@@ -266,6 +269,40 @@ impl RtspServerSession {
         Ok(())
     }
 
+    // pub async fn rtp_receive_loop(
+    //     &mut self,
+    //     io: Arc<Mutex<Box<dyn TNetIO + Send + Sync>>>,
+    //     track: Arc<Mutex<RtspTrack>>,
+    // ) {
+    //     tokio::spawn(async move {
+    //         let mut reader = BytesReader::new(BytesMut::new());
+
+    //         loop {
+    //             if let Ok(data) = io.lock().await.read().await {
+    //                 reader.extend_from_slice(&data[..]);
+    //                 track.lock().await.on_rtp(&mut reader).await;
+    //             }
+    //         }
+    //     });
+    // }
+
+    // pub async fn rtcp_receive_loop(
+    //     &mut self,
+    //     io: Arc<Mutex<Box<dyn TNetIO + Send + Sync>>>,
+    //     track: Arc<Mutex<RtspTrack>>,
+    // ) {
+    //     tokio::spawn(async move {
+    //         let mut reader = BytesReader::new(BytesMut::new());
+
+    //         loop {
+    //             if let Ok(data) = io.lock().await.read().await {
+    //                 reader.extend_from_slice(&data[..]);
+    //                 track.lock().await.on_rtcp(&mut reader)
+    //             }
+    //         }
+    //     });
+    // }
+
     async fn handle_announce(&mut self, rtsp_request: &RtspRequest) -> Result<(), SessionError> {
         if let Some(request_body) = &rtsp_request.body {
             if let Some(sdp) = Sdp::unmarshal(&request_body) {
@@ -280,10 +317,11 @@ impl RtspServerSession {
         // The sender is used for sending audio/video frame data to stream hub
         // receiver is used to passing to stream hub and receive the a/v frame data
         let (sender, receiver) = mpsc::unbounded_channel();
-        for (_, track) in &mut self.tracks {
+        for (_, t) in &mut self.tracks {
+            let mut track = t.lock().await;
             if let Some(unpacker) = &mut track.rtp_unpacker {
                 let sender_out = sender.clone();
-                unpacker.on_frame_handler(Box::new(
+                unpacker.lock().await.on_frame_handler(Box::new(
                     move |msg: FrameData| -> Result<(), UnPackerError> {
                         if let Err(err) = sender_out.send(msg) {
                             log::error!("send frame error: {}", err);
@@ -321,7 +359,8 @@ impl RtspServerSession {
         let mut response = Self::gen_response(status_code, &rtsp_request);
 
         for (_, v) in &mut self.tracks {
-            if !rtsp_request.url.contains(&v.media_control) {
+            let mut track = v.lock().await;
+            if !rtsp_request.url.contains(&track.media_control) {
                 continue;
             }
 
@@ -337,7 +376,7 @@ impl RtspServerSession {
                     match trans.protocol_type {
                         ProtocolType::TCP => {
                             log::info!("get transport TCP");
-                            v.create_packer(self.io.clone());
+                            track.create_packer(self.io.clone());
                         }
                         ProtocolType::UDP => {
                             let address = rtsp_request.address.clone();
@@ -346,14 +385,21 @@ impl RtspServerSession {
                             log::info!("get transport UDP : {}:{}", address, rtp_port);
                             if let Some(udp_io) = UdpIO::new(address.clone(), rtp_port).await {
                                 let box_udp_io: Box<dyn TNetIO + Send + Sync> = Box::new(udp_io);
-                                let io = Arc::new(Mutex::new(box_udp_io));
+
                                 log::info!("get transport UDP : {}:{}", address, rtp_port);
-                                v.create_packer(io);
+                                //if mode is empty then it is a player session.
+                                if trans.transport_mod.is_empty() {
+                                    track.create_packer(Arc::new(Mutex::new(box_udp_io)));
+                                } else {
+                                    track.rtp_receive_loop(box_udp_io).await;
+                                }
+
+                                // self.rtp_receive_loop(io, track).await
                             }
                         }
                     }
 
-                    v.set_transport(trans);
+                    track.set_transport(trans);
                 }
 
                 response
@@ -372,11 +418,13 @@ impl RtspServerSession {
     }
 
     async fn handle_play(&mut self, rtsp_request: &RtspRequest) -> Result<(), SessionError> {
-        for (t, track) in &mut self.tracks {
-            if let Some(packer) = &mut track.rtp_packer {
-                let channel_identifer = track.transport.interleaved[0];
+        for (t, lock_track) in &mut self.tracks {
+            let mut track = lock_track.lock().await;
+            let channel_identifer = track.transport.interleaved[0];
+            let protocol_type = track.transport.protocol_type.clone();
 
-                match track.transport.protocol_type {
+            if let Some(packer) = &mut track.rtp_packer {
+                match protocol_type {
                     ProtocolType::TCP => {
                         packer.on_packet_handler(Box::new(
                             move |io: Arc<Mutex<Box<dyn TNetIO + Send + Sync>>>, msg: BytesMut| {
@@ -441,7 +489,7 @@ impl RtspServerSession {
                         mut data,
                     } => {
                         if let Some(audio_track) = self.tracks.get_mut(&TrackType::Audio) {
-                            if let Some(packer) = &mut audio_track.rtp_packer {
+                            if let Some(packer) = &mut audio_track.lock().await.rtp_packer {
                                 packer.pack(&mut data, timestamp).await?;
                             }
                         }
@@ -451,7 +499,7 @@ impl RtspServerSession {
                         mut data,
                     } => {
                         if let Some(video_track) = self.tracks.get_mut(&TrackType::Video) {
-                            if let Some(packer) = &mut video_track.rtp_packer {
+                            if let Some(packer) = &mut video_track.lock().await.rtp_packer {
                                 packer.pack(&mut data, timestamp).await?;
                             }
                         }
@@ -515,7 +563,8 @@ impl RtspServerSession {
                         media_control,
                         self.io.clone(),
                     );
-                    self.tracks.insert(TrackType::Audio, track);
+                    self.tracks
+                        .insert(TrackType::Audio, Arc::new(Mutex::new(track)));
                 }
                 "video" => {
                     let codec_id = rtsp_codec::RTSP_CODEC_NAME_2_ID
@@ -534,7 +583,8 @@ impl RtspServerSession {
                         media_control,
                         self.io.clone(),
                     );
-                    self.tracks.insert(TrackType::Video, track);
+                    self.tracks
+                        .insert(TrackType::Video, Arc::new(Mutex::new(track)));
                 }
                 _ => {}
             }

@@ -19,6 +19,7 @@ use super::rtsp_codec::RtspCodecInfo;
 use super::rtsp_transport::RtspTransport;
 use crate::rtp::utils::Marshal;
 use crate::rtp::utils::Unmarshal;
+use bytes::BytesMut;
 use bytesio::bytes_reader::BytesReader;
 use bytesio::bytes_writer::AsyncBytesWriter;
 use bytesio::bytesio::TNetIO;
@@ -38,7 +39,17 @@ pub enum TrackType {
     Application,
 }
 
-// #[derive(Default)]
+// A track can be a audio/video track, the A/V media data is transmitted
+// over RTP, and the control data is transmitted over RTCP.
+// The rtp/rtcp can be over TCP or UDP :
+// 1. Over the TCP: It shares one TCP channel with the RTSP signaling data, and
+// the entire session uses only one TCP connection（RTSP signaling data/audio
+// RTP/audio RTCP/video RTP/video RTCP）
+// 2. Over the UDP: It will establish 4 UDP channles for A/V RTP/RTCP data.
+// 2.1 A RTP channel for audio media data transmitting.
+// 2.2 A RTCP channel for audio control data transmitting
+// 2.3 A RTP channel for video media data transmitting.
+// 2.4 A RTCP channel for video control data transmitting
 pub struct RtspTrack {
     track_type: TrackType,
     codec_info: RtspCodecInfo,
@@ -46,11 +57,17 @@ pub struct RtspTrack {
     pub uri: String,
     pub media_control: String,
     pub rtp_packer: Option<Box<dyn TPacker>>,
-    pub rtp_unpacker: Option<Box<dyn TUnPacker>>,
+    //The rtp packer will be used in a separate thread when
+    //received rtp data using a separate UDP channel,
+    //so here we add the Arc and Mutex
+    pub rtp_unpacker: Option<Arc<Mutex<Box<dyn TUnPacker>>>>,
     ssrc: u32,
     recv_ctx: RtcpContext,
     send_ctx: RtcpContext,
     init_sequence: u16,
+    // The following connections are used for UDP data receiving
+    rtp_io: Option<Arc<Mutex<Box<dyn TNetIO + Send + Sync>>>>,
+    rtcp_io: Option<Arc<Mutex<Box<dyn TNetIO + Send + Sync>>>>,
 }
 
 impl RtspTrack {
@@ -75,18 +92,91 @@ impl RtspTrack {
             recv_ctx: RtcpContext::default(),
             send_ctx: RtcpContext::default(),
             init_sequence: 0,
+            rtcp_io: None,
+            rtp_io: None,
         };
         rtsp_track.create_unpacker();
         rtsp_track
+    }
+
+    // let mut cur_reader = BytesReader::new(self.reader.read_bytes(length as usize)?);
+
+    // for (k, v) in &mut self.tracks {
+    //     let mut track = v.lock().await;
+    //     let rtp_identifier = track.transport.interleaved[0];
+    //     let rtcp_identifier = track.transport.interleaved[1];
+
+    //     if channel_identifier == rtp_identifier {
+    //         log::debug!("onrtp: {}", cur_reader.len());
+
+    //         track.on_rtp(&mut cur_reader);
+    //         log::debug!("onrtp end: {}", cur_reader.len());
+    //     } else if channel_identifier == rtcp_identifier {
+    //         log::debug!("onrtcp: {}", cur_reader.len());
+    //         track.on_rtcp(&mut cur_reader);
+    //         log::debug!("onrtcp end: {}", cur_reader.len());
+    //     }
+    // }
+
+    pub async fn rtp_receive_loop(&mut self, mut rtp_io: Box<dyn TNetIO + Send + Sync>) {
+        if let Some(rtp_unpacker) = &mut self.rtp_unpacker {
+            let rtp_unpacker_clone = rtp_unpacker.clone();
+
+            tokio::spawn(async move {
+                let mut reader = BytesReader::new(BytesMut::new());
+                loop {
+                    match rtp_io.read().await {
+                        Ok(data) => {
+                            reader.extend_from_slice(&data[..]);
+                            if let Err(err) = rtp_unpacker_clone.lock().await.unpack(&mut reader) {
+                                log::error!("unpack rtp error: {:?}", err);
+                            }
+                        }
+                        Err(err) => {
+                            log::error!("read error: {:?}", err);
+                            break;
+                        }
+                    }
+                }
+            });
+        }
+    }
+
+    pub async fn rtcp_receive_loop(&mut self, mut rtcp_io: Box<dyn TNetIO + Send + Sync>) {
+        tokio::spawn(async move {
+            let mut reader = BytesReader::new(BytesMut::new());
+            loop {
+                match rtcp_io.read().await {
+                    Ok(data) => {
+                        reader.extend_from_slice(&data[..]);
+                        if let Err(err) = rtp_unpacker_clone.lock().await.unpack(&mut reader) {
+                            log::error!("unpack rtp error: {:?}", err);
+                        }
+                    }
+                    Err(err) => {
+                        log::error!("read error: {:?}", err);
+                        break;
+                    }
+                }
+            }
+        });
+    }
+
+    pub fn set_rtp_io(&mut self, io: Arc<Mutex<Box<dyn TNetIO + Send + Sync>>>) {
+        self.rtp_io = Some(io)
+    }
+
+    pub fn set_rtcp_io(&mut self, io: Arc<Mutex<Box<dyn TNetIO + Send + Sync>>>) {
+        self.rtcp_io = Some(io)
     }
 
     pub fn set_transport(&mut self, transport: RtspTransport) {
         self.transport = transport;
     }
 
-    pub fn on_rtp(&mut self, reader: &mut BytesReader) {
+    pub async fn on_rtp(&mut self, reader: &mut BytesReader) {
         if let Some(unpacker) = &mut self.rtp_unpacker {
-            unpacker.unpack(reader);
+            unpacker.lock().await.unpack(reader);
         }
     }
 
@@ -115,13 +205,15 @@ impl Track for RtspTrack {
     fn create_unpacker(&mut self) {
         match self.codec_info.codec_id {
             RtspCodecId::H264 => {
-                self.rtp_unpacker = Some(Box::new(RtpH264UnPacker::default()));
+                self.rtp_unpacker =
+                    Some(Arc::new(Mutex::new(Box::new(RtpH264UnPacker::default()))));
             }
             RtspCodecId::H265 => {
-                self.rtp_unpacker = Some(Box::new(RtpH265UnPacker::default()));
+                self.rtp_unpacker =
+                    Some(Arc::new(Mutex::new(Box::new(RtpH265UnPacker::default()))));
             }
             RtspCodecId::AAC => {
-                self.rtp_unpacker = Some(Box::new(RtpAacUnPacker::default()));
+                self.rtp_unpacker = Some(Arc::new(Mutex::new(Box::new(RtpAacUnPacker::default()))));
             }
             RtspCodecId::G711A => {}
         }
