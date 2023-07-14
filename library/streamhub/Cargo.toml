@@ -10,8 +10,7 @@ edition = "2021"
 failure = "0.1.1"
 byteorder = "1.4.2"
 bytes = "1.0.0"
-
-uuid = { version = "0.6.5", features = ["v4"] }
+rand = "0.8"
 log = "0.4"
 chrono = "0.4"
 indexmap = "1.9.3"
@@ -24,7 +23,10 @@ serde_json = { version = "1", default-features = false, features = [
 ] }
 serde = { version = "1.0", features = ["derive", "rc"] }
 
-xflv = "0.2.0"
+#xflv = "0.2.0"
+
+xflv = { path = "../../library/container/flv/" }
+
 
 [dependencies.tokio]
 version = "1.4.0"

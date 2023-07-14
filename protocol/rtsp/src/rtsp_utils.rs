@@ -9,12 +9,6 @@ macro_rules! scanf {
 
 pub(crate) use scanf;
 
-pub fn gen_random_string(size: usize) -> String {
-    let mut rng = rand::thread_rng();
-    (0..size)
-        .map(|_| rng.gen_range(0..=9).to_string())
-        .collect()
-}
 #[cfg(test)]
 mod tests {
 
@@ -27,11 +21,5 @@ mod tests {
         {
             println!("a:{} b:{} c:{} ", a, b, c);
         }
-    }
-    use super::gen_random_string;
-
-    #[test]
-    fn test_gen_random_string() {
-        println!("a:{}", gen_random_string(10));
     }
 }

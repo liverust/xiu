@@ -1,4 +1,5 @@
 use crate::rtp::errors::PackerError;
+use crate::rtp::errors::UnPackerError;
 use crate::rtp::rtcp::rtcp_header::RtcpHeader;
 use crate::rtp::rtcp::RTCP_SR;
 use crate::rtp::utils::OnFrameFn;
@@ -38,18 +39,20 @@ pub trait TRtpFunc {
 pub struct RtpChannel {
     codec_info: RtspCodecInfo,
     // pub rtp_packer: Option<Box<dyn TPacker>>,
-    // //The rtp packer will be used in a separate thread when
-    // //received rtp data using a separate UDP channel,
-    // //so here we add the Arc and Mutex
+    // The rtp packer will be used in a separate thread when
+    // received rtp data using a separate UDP channel,
+    // so here we add the Arc and Mutex
     pub rtp_packer: Option<Box<dyn TPacker>>,
     pub rtp_unpacker: Option<Box<dyn TUnPacker>>,
     ssrc: u32,
     init_sequence: u16,
 }
 
+#[derive(Default)]
 pub struct RtcpChannel {
     recv_ctx: RtcpContext,
     send_ctx: RtcpContext,
+    on_packet_handler: Option<OnPacketFn>,
 }
 
 impl RtpChannel {
@@ -66,10 +69,11 @@ impl RtpChannel {
         rtp_channel
     }
 
-    pub fn on_rtp(&mut self, reader: &mut BytesReader) {
+    pub fn on_rtp(&mut self, reader: &mut BytesReader) -> Result<(), UnPackerError> {
         if let Some(unpacker) = &mut self.rtp_unpacker {
-            unpacker.unpack(reader);
+            unpacker.unpack(reader)?;
         }
+        Ok(())
     }
 
     pub async fn pack(&mut self, nalus: &mut BytesMut, timestamp: u32) -> Result<(), PackerError> {
@@ -142,15 +146,6 @@ impl TRtpFunc for RtpChannel {
 }
 
 impl RtcpChannel {
-    pub fn new() -> Self {
-        let mut rtcp_channel = RtcpChannel {
-            recv_ctx: RtcpContext::default(),
-            send_ctx: RtcpContext::default(),
-        };
-
-        rtcp_channel
-    }
-
     pub fn on_rtcp(&mut self, reader: &mut BytesReader) {
         let mut reader_clone = BytesReader::new(reader.get_remaining_bytes());
         if let Ok(rtcp_header) = RtcpHeader::unmarshal(&mut reader_clone) {
@@ -165,8 +160,17 @@ impl RtcpChannel {
             }
         }
     }
-    pub fn send_rtcp_receier_report(&mut self) {
+    pub async fn send_rtcp_receier_report(&mut self) {
         let rr = self.recv_ctx.generate_rr();
-        let data = rr.marshal();
+        if let Ok(packet_bytesmut) = rr.marshal() {
+            // if let Some(f) = &self.on_packet_handler {
+            //     // log::info!("seq number: {}", packet.header.seq_number);
+            //     f(self.io.clone(), packet_bytesmut).await?;
+            // }
+        }
+    }
+
+    pub fn on_packet_handler(&mut self, f: OnPacketFn) {
+        self.on_packet_handler = Some(f);
     }
 }

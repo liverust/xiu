@@ -13,9 +13,11 @@ use {
         FrameData, FrameDataReceiver, NotifyInfo, StreamHubEvent, StreamHubEventSender,
         SubscribeType, SubscriberInfo,
     },
-    streamhub::stream::StreamIdentifier,
+    streamhub::{
+        stream::StreamIdentifier,
+        utils::{RandomDigitCount, Uuid},
+    },
     tokio::sync::mpsc,
-    uuid::Uuid,
     xflv::muxer::{FlvMuxer, HEADER_LENGTH},
 };
 
@@ -43,7 +45,7 @@ impl HttpFlv {
         remote_addr: SocketAddr,
     ) -> Self {
         let (_, data_consumer) = mpsc::unbounded_channel();
-        let subscriber_id = Uuid::new_v4();
+        let subscriber_id = Uuid::new(RandomDigitCount::Four);
 
         Self {
             app_name,

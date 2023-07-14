@@ -77,6 +77,7 @@ impl RtcpContext {
         }
     }
 
+    //int rtcp_report_block(struct rtp_member* sender, uint8_t* ptr, int bytes)
     fn gen_report_block(&mut self) -> ReportBlock {
         let extend_max = self.cycles + self.max_seq as u32;
         let expected = extend_max - self.base_seq + 1;
@@ -140,8 +141,11 @@ impl RtcpContext {
         self.sender_ssrc = sr.ssrc;
     }
 
-    pub fn received_rtp(&mut self, pkt: RtpPacket) {}
+    pub fn received_rtp(&mut self, pkt: RtpPacket) {
 
+    }
+
+    //static int rtp_seq_update(struct rtp_member *sender, uint16_t seq)
     fn update_sequence(&mut self, seq: u16) -> usize {
         let delta = seq - self.max_seq;
         if self.probation > 0 {

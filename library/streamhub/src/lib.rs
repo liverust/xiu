@@ -3,6 +3,7 @@ pub mod errors;
 pub mod notify;
 pub mod statistics;
 pub mod stream;
+pub mod utils;
 
 use {
     crate::notify::Notifier,
@@ -17,7 +18,7 @@ use {
     std::sync::Arc,
     stream::StreamIdentifier,
     tokio::sync::{broadcast, mpsc, mpsc::UnboundedReceiver},
-    uuid::Uuid,
+    utils::Uuid,
 };
 
 //receive data from ChannelsManager and send to players/subscribers
@@ -238,7 +239,8 @@ impl StreamsHub {
                     sender,
                 } => {
                     let sub_id = info.id;
-                    let rv = self.subscribe(&identifier, info.clone(), sender).await;
+                    let info_clone = info.clone();
+                    let rv = self.subscribe(&identifier, info_clone, sender).await;
                     match rv {
                         Ok(()) => {
                             if let Some(notifier) = &self.notifier {
@@ -413,6 +415,7 @@ impl StreamsHub {
     ) -> Result<(), ChannelError> {
         match self.streams.get_mut(identifer) {
             Some(producer) => {
+                log::info!("unsubscribe....:{}", identifer);
                 let event = TransmitterEvent::UnSubscribe { info: sub_info };
                 producer.send(event).map_err(|_| ChannelError {
                     value: ChannelErrorValue::SendError,

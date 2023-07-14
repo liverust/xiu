@@ -11,9 +11,9 @@ use {
             SubscribeType, SubscriberInfo,
         },
         stream::StreamIdentifier,
+        utils::{RandomDigitCount, Uuid},
     },
     tokio::{sync::mpsc, time::sleep},
-    uuid::Uuid,
     xflv::define::FlvData,
 };
 
@@ -38,7 +38,7 @@ impl FlvDataReceiver {
         duration: i64,
     ) -> Self {
         let (_, data_consumer) = mpsc::unbounded_channel();
-        let subscriber_id = Uuid::new_v4();
+        let subscriber_id = Uuid::new(RandomDigitCount::Four);
 
         Self {
             app_name: app_name.clone(),

@@ -21,12 +21,17 @@ use {
         utils::RtmpUrlParser,
     },
     bytes::BytesMut,
-    bytesio::{bytes_writer::AsyncBytesWriter, bytesio::BytesIO},
+    bytesio::{
+        bytes_writer::AsyncBytesWriter,
+        bytesio::{TNetIO, TcpIO},
+    },
     indexmap::IndexMap,
     std::{sync::Arc, time::Duration},
-    streamhub::define::StreamHubEventSender,
+    streamhub::{
+        define::StreamHubEventSender,
+        utils::{RandomDigitCount, Uuid},
+    },
     tokio::{net::TcpStream, sync::Mutex},
-    uuid::Uuid,
 };
 
 enum ServerSessionState {
@@ -43,7 +48,7 @@ pub struct ServerSession {
     pub app_name: String,
     pub stream_name: String,
     pub url_parameters: String,
-    io: Arc<Mutex<BytesIO>>,
+    io: Arc<Mutex<Box<dyn TNetIO + Send + Sync>>>,
     handshaker: HandshakeServer,
     unpacketizer: ChunkUnpacketizer,
     state: ServerSessionState,
@@ -68,8 +73,10 @@ impl ServerSession {
             None
         };
 
-        let net_io = Arc::new(Mutex::new(BytesIO::new(stream)));
-        let subscriber_id = Uuid::new_v4();
+        let tcp_io: Box<dyn TNetIO + Send + Sync> = Box::new(TcpIO::new(stream));
+        let net_io = Arc::new(Mutex::new(tcp_io));
+
+        let subscriber_id = Uuid::new(RandomDigitCount::Four);
         Self {
             app_name: String::from(""),
             stream_name: String::from(""),

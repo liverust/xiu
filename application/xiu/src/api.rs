@@ -7,8 +7,7 @@ use {
     serde::Deserialize,
     std::str::FromStr,
     std::sync::Arc,
-    streamhub::{define, define::StreamHubEventSender},
-    uuid::Uuid,
+    streamhub::{define, define::StreamHubEventSender, utils::Uuid},
     {
         tokio,
         tokio::sync::{mpsc, oneshot},
@@ -75,7 +74,7 @@ impl ApiService {
     async fn kick_off_client(&self, id: KickOffClient) -> Result<String> {
         let id_result = Uuid::from_str(&id.id);
 
-        if let Ok(id) = id_result {
+        if let Some(id) = id_result {
             let channel_event = define::StreamHubEvent::ApiKickClient { id };
 
             if let Err(err) = self.channel_event_producer.send(channel_event) {

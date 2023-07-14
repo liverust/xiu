@@ -6,20 +6,18 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-#bytesio = "0.2.0"
 rand = "0.8"
 byteorder = "1.4.2"
-uuid = { version = "0.6.5", features = ["v4"] }
 tokio = "1.4.0"
 bytes = "1.0.0"
 log = "0.4"
 failure = "0.1.1"
-httparse = "1.8.0"
 http = "0.2.9"
 indexmap = "1.9.3"
 lazy_static = "1.4.0"
 chrono = "0.4"
 async-trait = "0.1.70"
 
+#bytesio = "0.2.0"
 bytesio = { path = "../../library/bytesio/" }
 streamhub = { path = "../../library/streamhub/" }

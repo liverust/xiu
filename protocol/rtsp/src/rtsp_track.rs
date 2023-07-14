@@ -62,19 +62,6 @@ pub struct RtspTrack {
 
     pub rtp_channel: Arc<Mutex<RtpChannel>>,
     rtcp_channel: Arc<Mutex<RtcpChannel>>,
-    // codec_info: RtspCodecInfo,
-    // pub rtp_packer: Option<Box<dyn TPacker>>,
-    // //The rtp packer will be used in a separate thread when
-    // //received rtp data using a separate UDP channel,
-    // //so here we add the Arc and Mutex
-    // pub rtp_unpacker: Option<Arc<Mutex<Box<dyn TUnPacker>>>>,
-    // ssrc: u32,
-    // init_sequence: u16,
-    // recv_ctx: RtcpContext,
-    // send_ctx: RtcpContext,
-    // The following connections are used for UDP data receiving
-    // rtp_io: Option<Arc<Mutex<Box<dyn TNetIO + Send + Sync>>>>,
-    // rtcp_io: Option<Arc<Mutex<Box<dyn TNetIO + Send + Sync>>>>,
 }
 
 impl RtspTrack {
@@ -92,7 +79,7 @@ impl RtspTrack {
             transport: RtspTransport::default(),
             uri: String::default(),
             rtp_channel: Arc::new(Mutex::new(rtp_channel)),
-            rtcp_channel: Arc::new(Mutex::new(RtcpChannel::new())),
+            rtcp_channel: Arc::new(Mutex::new(RtcpChannel::default())),
         };
 
         rtsp_track

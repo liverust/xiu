@@ -15,7 +15,7 @@ use {
     },
     async_trait::async_trait,
     bytes::BytesMut,
-    bytesio::bytesio::BytesIO,
+    bytesio::bytesio::TNetIO,
     std::fmt,
     std::{net::SocketAddr, sync::Arc},
     streamhub::{
@@ -27,9 +27,9 @@ use {
         errors::{ChannelError, ChannelErrorValue},
         statistics::StreamStatistics,
         stream::StreamIdentifier,
+        utils::Uuid,
     },
     tokio::sync::{mpsc, Mutex},
-    uuid::Uuid,
 };
 
 pub struct Common {
@@ -50,7 +50,7 @@ pub struct Common {
 
 impl Common {
     pub fn new(
-        net_io: Arc<Mutex<BytesIO>>,
+        net_io: Arc<Mutex<Box<dyn TNetIO + Send + Sync>>>,
         event_producer: StreamHubEventSender,
         session_type: SessionType,
         remote_addr: Option<SocketAddr>,

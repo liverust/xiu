@@ -20,13 +20,17 @@ use {
         user_control_messages::writer::EventMessagesWriter,
         utils::RtmpUrlParser,
     },
-    bytesio::{bytes_writer::AsyncBytesWriter, bytesio::BytesIO},
+    bytesio::{
+        bytes_writer::AsyncBytesWriter,
+        bytesio::{TNetIO, TcpIO},
+    },
     indexmap::IndexMap,
     std::sync::Arc,
     //crate::utils::print::print,
     streamhub::define::StreamHubEventSender,
+    streamhub::utils::RandomDigitCount,
+    streamhub::utils::Uuid,
     tokio::{net::TcpStream, sync::Mutex},
-    uuid::Uuid,
 };
 
 #[allow(dead_code)]
@@ -61,7 +65,7 @@ pub enum ClientType {
     Publish,
 }
 pub struct ClientSession {
-    io: Arc<Mutex<BytesIO>>,
+    io: Arc<Mutex<Box<dyn TNetIO + Send + Sync>>>,
     common: Common,
     handshaker: SimpleHandshakeClient,
     unpacketizer: ChunkUnpacketizer,
@@ -100,8 +104,10 @@ impl ClientSession {
             None
         };
 
-        let net_io = Arc::new(Mutex::new(BytesIO::new(stream)));
-        let subscriber_id = Uuid::new_v4();
+        let tcp_io: Box<dyn TNetIO + Send + Sync> = Box::new(TcpIO::new(stream));
+        let net_io = Arc::new(Mutex::new(tcp_io));
+
+        let subscriber_id = Uuid::new(RandomDigitCount::Four);
 
         let common = Common::new(
             Arc::clone(&net_io),

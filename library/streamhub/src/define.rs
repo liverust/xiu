@@ -1,3 +1,5 @@
+use crate::utils;
+
 use {
     super::errors::ChannelError,
     crate::statistics::StreamStatistics,
@@ -10,7 +12,7 @@ use {
     std::fmt,
     std::sync::Arc,
     tokio::sync::{broadcast, mpsc, oneshot},
-    uuid::Uuid,
+    utils::Uuid,
 };
 
 #[derive(Debug, Serialize, Clone, Eq, PartialEq)]

@@ -24,16 +24,6 @@ pub trait Marshal<T> {
 }
 
 pub type OnFrameFn = Box<dyn Fn(FrameData) -> Result<(), UnPackerError> + Send + Sync>;
-// pub type OnFrameFn =
-//     Box<dyn Fn(FrameData) -> Pin<Box<dyn Future<Output = ()> + Send + 'static>> + Send + Sync>;
-
-// pub type OnResponderFeedbackFn = Box<
-//     dyn (FnMut(
-//             Box<dyn RtcpPacket + Send + Sync>,
-//         ) -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>)
-//         + Send
-//         + Sync,
-// >;
 
 //Arc<Mutex<Box<dyn TNetIO + Send + Sync>>> : The network connection used by packer to send a/v data
 //BytesMut: The Rtp packet data that will be sent using the TNetIO
@@ -48,16 +38,21 @@ pub type OnPacketFn = Box<
 
 #[async_trait]
 pub trait TPacker: Send + Sync {
+    /*Split frame to rtp packets and send out*/
     async fn pack(&mut self, nalus: &mut BytesMut, timestamp: u32) -> Result<(), PackerError>;
+    /*Call back function used for processing a rtp packet.*/
     fn on_packet_handler(&mut self, f: OnPacketFn);
 }
 
 #[async_trait]
 pub trait TRtpPacker: TPacker {
+    /*pack one nalu to rtp packets*/
     async fn pack_nalu(&mut self, nalu: BytesMut) -> Result<(), PackerError>;
 }
 pub trait TUnPacker: Send + Sync {
+    /*Assemble rtp fragments into complete frame and send to stream hub*/
     fn unpack(&mut self, reader: &mut BytesReader) -> Result<(), UnPackerError>;
+    /*Call back function used for processing a frame.*/
     fn on_frame_handler(&mut self, f: OnFrameFn);
 }
 
