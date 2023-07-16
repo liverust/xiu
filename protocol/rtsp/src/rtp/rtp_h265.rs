@@ -6,10 +6,12 @@ use super::errors::UnPackerError;
 use super::utils;
 use super::utils::Marshal;
 use super::utils::OnFrameFn;
+use super::utils::OnPacket2Fn;
 use super::utils::OnPacketFn;
 use super::utils::TPacker;
-use super::utils::TRtpPacker;
+use super::utils::TRtpReceiverForRtcp;
 use super::utils::TUnPacker;
+use super::utils::TVideoPacker;
 use super::utils::Unmarshal;
 use super::RtpHeader;
 use super::RtpPacket;
@@ -139,8 +141,12 @@ impl TPacker for RtpH265Packer {
     }
 }
 
+impl TRtpReceiverForRtcp for RtpH265Packer {
+    fn on_rtp(&mut self, f: OnPacket2Fn) {}
+}
+
 #[async_trait]
-impl TRtpPacker for RtpH265Packer {
+impl TVideoPacker for RtpH265Packer {
     async fn pack_nalu(&mut self, nalu: BytesMut) -> Result<(), PackerError> {
         if nalu.len() + define::RTP_FIXED_HEADER_LEN <= self.mtu {
             self.pack_single(nalu).await?;
@@ -330,4 +336,8 @@ impl RtpH265UnPacker {
 
         Ok(())
     }
+}
+
+impl TRtpReceiverForRtcp for RtpH265UnPacker {
+    fn on_rtp(&mut self, f: OnPacket2Fn) {}
 }

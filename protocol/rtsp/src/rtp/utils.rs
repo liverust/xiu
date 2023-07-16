@@ -34,10 +34,18 @@ pub type OnPacketFn = Box<
         ) -> Pin<Box<dyn Future<Output = Result<(), PackerError>> + Send + 'static>>
         + Send
         + Sync,
->; //fn(BytesMut) -> Result<(), PackerError>;
+>;
+
+pub type OnPacket2Fn = Box<
+    dyn Fn(BytesMut) -> Pin<Box<dyn Future<Output = Result<(), PackerError>> + Send + 'static>>
+        + Send
+        + Sync,
+>;
+
+pub trait TRtpReceiverForRtcp {}
 
 #[async_trait]
-pub trait TPacker: Send + Sync {
+pub trait TPacker: TRtpReceiverForRtcp + Send + Sync {
     /*Split frame to rtp packets and send out*/
     async fn pack(&mut self, nalus: &mut BytesMut, timestamp: u32) -> Result<(), PackerError>;
     /*Call back function used for processing a rtp packet.*/
@@ -45,11 +53,12 @@ pub trait TPacker: Send + Sync {
 }
 
 #[async_trait]
-pub trait TRtpPacker: TPacker {
+pub trait TVideoPacker: TPacker {
     /*pack one nalu to rtp packets*/
     async fn pack_nalu(&mut self, nalu: BytesMut) -> Result<(), PackerError>;
 }
-pub trait TUnPacker: Send + Sync {
+
+pub trait TUnPacker: TRtpReceiverForRtcp + Send + Sync {
     /*Assemble rtp fragments into complete frame and send to stream hub*/
     fn unpack(&mut self, reader: &mut BytesReader) -> Result<(), UnPackerError>;
     /*Call back function used for processing a frame.*/
@@ -69,7 +78,7 @@ pub fn find_start_code(nalus: &[u8]) -> Option<usize> {
     nalus.windows(pattern.len()).position(|w| w == pattern)
 }
 
-pub async fn split_annexb_and_process<T: TRtpPacker>(
+pub async fn split_annexb_and_process<T: TVideoPacker>(
     nalus: &mut BytesMut,
     packer: &mut T,
 ) -> Result<(), PackerError> {

@@ -36,10 +36,6 @@ pub trait TRtpFunc {
 
 pub struct RtpChannel {
     codec_info: RtspCodecInfo,
-    // pub rtp_packer: Option<Box<dyn TPacker>>,
-    // The rtp packer will be used in a separate thread when
-    // received rtp data using a separate UDP channel,
-    // so here we add the Arc and Mutex
     pub rtp_packer: Option<Box<dyn TPacker>>,
     pub rtp_unpacker: Option<Box<dyn TUnPacker>>,
     ssrc: u32,

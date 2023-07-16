@@ -3,9 +3,11 @@ use super::errors::UnPackerError;
 
 use super::utils::Marshal;
 use super::utils::OnFrameFn;
+use super::utils::OnPacket2Fn;
 use super::utils::OnPacketFn;
 use super::utils::TPacker;
 
+use super::utils::TRtpReceiverForRtcp;
 use super::utils::TUnPacker;
 use super::utils::Unmarshal;
 use super::RtpHeader;
@@ -79,6 +81,10 @@ impl TPacker for RtpAacPacker {
     }
 }
 
+impl TRtpReceiverForRtcp for RtpAacPacker {
+    fn on_rtp(&mut self, f: OnPacket2Fn) {}
+}
+
 #[derive(Default)]
 pub struct RtpAacUnPacker {
     sequence_number: u16,
@@ -146,4 +152,8 @@ impl TUnPacker for RtpAacUnPacker {
     fn on_frame_handler(&mut self, f: OnFrameFn) {
         self.on_frame_handler = Some(f);
     }
+}
+
+impl TRtpReceiverForRtcp for RtpAacUnPacker {
+    fn on_rtp(&mut self, f: OnPacket2Fn) {}
 }
