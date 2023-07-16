@@ -17,7 +17,6 @@ use async_trait::async_trait;
 use byteorder::BigEndian;
 use bytes::{BufMut, BytesMut};
 use bytesio::bytes_reader::BytesReader;
-use bytesio::bytes_writer::AsyncBytesWriter;
 use bytesio::bytesio::TNetIO;
 use std::sync::Arc;
 use streamhub::define::FrameData;
