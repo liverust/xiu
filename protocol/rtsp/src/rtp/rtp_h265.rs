@@ -6,8 +6,8 @@ use super::errors::UnPackerError;
 use super::utils;
 use super::utils::Marshal;
 use super::utils::OnFrameFn;
-use super::utils::OnPacket2Fn;
-use super::utils::OnPacketFn;
+use super::utils::OnRtpPacketFn;
+use super::utils::OnRtpPacketFn2;
 use super::utils::TPacker;
 use super::utils::TRtpReceiverForRtcp;
 use super::utils::TUnPacker;
@@ -28,7 +28,8 @@ pub struct RtpH265Packer {
     header: RtpHeader,
     mtu: usize,
     io: Arc<Mutex<Box<dyn TNetIO + Send + Sync>>>,
-    on_packet_handler: Option<OnPacketFn>,
+    on_packet_handler: Option<OnRtpPacketFn>,
+    on_packet_for_rtcp_handler: Option<OnRtpPacketFn2>,
 }
 
 impl RtpH265Packer {
@@ -50,6 +51,7 @@ impl RtpH265Packer {
             mtu,
             io,
             on_packet_handler: None,
+            on_packet_for_rtcp_handler: None,
         }
     }
 
@@ -104,9 +106,12 @@ impl RtpH265Packer {
             packet.payload.put(fu_payload);
             packet.header.marker = if fu_header & define::FU_END > 0 { 1 } else { 0 };
 
-            let packet_bytesmut = packet.marshal()?;
+            if let Some(f) = &self.on_packet_for_rtcp_handler {
+                f(packet.clone());
+            }
+
             if let Some(f) = &self.on_packet_handler {
-                f(self.io.clone(), packet_bytesmut).await?;
+                f(self.io.clone(), packet).await?;
             }
             left_nalu_bytes = nalu_reader.len();
             self.header.seq_number += 1;
@@ -119,11 +124,14 @@ impl RtpH265Packer {
         packet.header.marker = 1;
         packet.payload.put(nalu);
 
-        let packet_bytesmut = packet.marshal()?;
         self.header.seq_number += 1;
 
+        if let Some(f) = &self.on_packet_for_rtcp_handler {
+            f(packet.clone());
+        }
+
         if let Some(f) = &self.on_packet_handler {
-            return f(self.io.clone(), packet_bytesmut).await;
+            return f(self.io.clone(), packet).await;
         }
         Ok(())
     }
@@ -136,13 +144,15 @@ impl TPacker for RtpH265Packer {
         utils::split_annexb_and_process(nalus, self).await?;
         Ok(())
     }
-    fn on_packet_handler(&mut self, f: OnPacketFn) {
+    fn on_packet_handler(&mut self, f: OnRtpPacketFn) {
         self.on_packet_handler = Some(f);
     }
 }
 
 impl TRtpReceiverForRtcp for RtpH265Packer {
-    fn on_rtp(&mut self, f: OnPacket2Fn) {}
+    fn on_packet_for_rtcp_handler(&mut self, f: OnRtpPacketFn2) {
+        self.on_packet_for_rtcp_handler = Some(f);
+    }
 }
 
 #[async_trait]
@@ -165,11 +175,16 @@ pub struct RtpH265UnPacker {
     flags: i16,
     using_donl_field: bool,
     on_frame_handler: Option<OnFrameFn>,
+    on_packet_for_rtcp_handler: Option<OnRtpPacketFn2>,
 }
 
 impl TUnPacker for RtpH265UnPacker {
     fn unpack(&mut self, reader: &mut BytesReader) -> Result<(), UnPackerError> {
         let rtp_packet = RtpPacket::unmarshal(reader)?;
+
+        if let Some(f) = &self.on_packet_for_rtcp_handler {
+            f(rtp_packet.clone());
+        }
 
         self.timestamp = rtp_packet.header.timestamp;
         self.sequence_number = rtp_packet.header.seq_number;
@@ -339,5 +354,7 @@ impl RtpH265UnPacker {
 }
 
 impl TRtpReceiverForRtcp for RtpH265UnPacker {
-    fn on_rtp(&mut self, f: OnPacket2Fn) {}
+    fn on_packet_for_rtcp_handler(&mut self, f: OnRtpPacketFn2) {
+        self.on_packet_for_rtcp_handler = Some(f);
+    }
 }

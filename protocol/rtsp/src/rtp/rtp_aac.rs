@@ -3,8 +3,8 @@ use super::errors::UnPackerError;
 
 use super::utils::Marshal;
 use super::utils::OnFrameFn;
-use super::utils::OnPacket2Fn;
-use super::utils::OnPacketFn;
+use super::utils::OnRtpPacketFn;
+use super::utils::OnRtpPacketFn2;
 use super::utils::TPacker;
 
 use super::utils::TRtpReceiverForRtcp;
@@ -27,7 +27,8 @@ use tokio::sync::Mutex;
 pub struct RtpAacPacker {
     header: RtpHeader,
     mtu: usize,
-    on_packet_handler: Option<OnPacketFn>,
+    on_packet_handler: Option<OnRtpPacketFn>,
+    on_packet_for_rtcp_handler: Option<OnRtpPacketFn2>,
     io: Arc<Mutex<Box<dyn TNetIO + Send + Sync>>>,
 }
 
@@ -51,6 +52,7 @@ impl RtpAacPacker {
             mtu,
             io,
             on_packet_handler: None,
+            on_packet_for_rtcp_handler: None,
         }
     }
 }
@@ -66,9 +68,12 @@ impl TPacker for RtpAacPacker {
         packet.payload.put_u8(((data_len & 0x1F) << 3) as u8);
         packet.payload.put(data);
 
-        let packet_data = packet.marshal()?;
+        if let Some(f) = &self.on_packet_for_rtcp_handler {
+            f(packet.clone());
+        }
+
         if let Some(f) = &self.on_packet_handler {
-            f(self.io.clone(), packet_data).await?;
+            f(self.io.clone(), packet).await?;
         }
 
         self.header.seq_number += 1;
@@ -76,13 +81,15 @@ impl TPacker for RtpAacPacker {
         Ok(())
     }
 
-    fn on_packet_handler(&mut self, f: OnPacketFn) {
+    fn on_packet_handler(&mut self, f: OnRtpPacketFn) {
         self.on_packet_handler = Some(f);
     }
 }
 
 impl TRtpReceiverForRtcp for RtpAacPacker {
-    fn on_rtp(&mut self, f: OnPacket2Fn) {}
+    fn on_packet_for_rtcp_handler(&mut self, f: OnRtpPacketFn2) {
+        self.on_packet_for_rtcp_handler = Some(f);
+    }
 }
 
 #[derive(Default)]
@@ -92,6 +99,7 @@ pub struct RtpAacUnPacker {
     fu_buffer: BytesMut,
     flags: i16,
     on_frame_handler: Option<OnFrameFn>,
+    on_packet_for_rtcp_handler: Option<OnRtpPacketFn2>,
 }
 
 // +---------+-----------+-----------+---------------+
@@ -115,7 +123,11 @@ impl RtpAacUnPacker {
 
 impl TUnPacker for RtpAacUnPacker {
     fn unpack(&mut self, reader: &mut BytesReader) -> Result<(), UnPackerError> {
-        let mut rtp_packet = RtpPacket::unmarshal(reader)?;
+        let rtp_packet = RtpPacket::unmarshal(reader)?;
+
+        if let Some(f) = &self.on_packet_for_rtcp_handler {
+            f(rtp_packet.clone());
+        }
 
         let mut reader_payload = BytesReader::new(rtp_packet.payload);
 
@@ -155,5 +167,7 @@ impl TUnPacker for RtpAacUnPacker {
 }
 
 impl TRtpReceiverForRtcp for RtpAacUnPacker {
-    fn on_rtp(&mut self, f: OnPacket2Fn) {}
+    fn on_packet_for_rtcp_handler(&mut self, f: OnRtpPacketFn2) {
+        self.on_packet_for_rtcp_handler = Some(f);
+    }
 }

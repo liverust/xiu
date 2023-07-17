@@ -1,6 +1,7 @@
 use super::define;
 use super::errors::PackerError;
 use super::errors::UnPackerError;
+use super::RtpPacket;
 use async_trait::async_trait;
 use bytes::BytesMut;
 use bytesio::bytes_reader::BytesReader;
@@ -27,29 +28,29 @@ pub type OnFrameFn = Box<dyn Fn(FrameData) -> Result<(), UnPackerError> + Send +
 
 //Arc<Mutex<Box<dyn TNetIO + Send + Sync>>> : The network connection used by packer to send a/v data
 //BytesMut: The Rtp packet data that will be sent using the TNetIO
-pub type OnPacketFn = Box<
+pub type OnRtpPacketFn = Box<
     dyn Fn(
             Arc<Mutex<Box<dyn TNetIO + Send + Sync>>>,
-            BytesMut,
+            RtpPacket,
         ) -> Pin<Box<dyn Future<Output = Result<(), PackerError>> + Send + 'static>>
         + Send
         + Sync,
 >;
 
-pub type OnPacket2Fn = Box<
-    dyn Fn(BytesMut) -> Pin<Box<dyn Future<Output = Result<(), PackerError>> + Send + 'static>>
-        + Send
-        + Sync,
->;
+pub type OnRtpPacketFn2 =
+    Box<dyn Fn(RtpPacket) -> Pin<Box<dyn Future<Output = ()> + Send + 'static>> + Send + Sync>;
+// pub type OnPacketFn2 = Box<dyn Fn(&RtpPacket) + Send + Sync>;
 
-pub trait TRtpReceiverForRtcp {}
+pub trait TRtpReceiverForRtcp {
+    fn on_packet_for_rtcp_handler(&mut self, f: OnRtpPacketFn2);
+}
 
 #[async_trait]
 pub trait TPacker: TRtpReceiverForRtcp + Send + Sync {
     /*Split frame to rtp packets and send out*/
     async fn pack(&mut self, nalus: &mut BytesMut, timestamp: u32) -> Result<(), PackerError>;
     /*Call back function used for processing a rtp packet.*/
-    fn on_packet_handler(&mut self, f: OnPacketFn);
+    fn on_packet_handler(&mut self, f: OnRtpPacketFn);
 }
 
 #[async_trait]

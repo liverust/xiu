@@ -25,8 +25,8 @@ pub fn distance(new: u16, old: u16) -> u16 {
 
 const MIN_SEQUENTIAL: u32 = 2;
 const RTP_SEQ_MOD: u32 = 1 << 16;
-const MAX_DROPOUT: u16 = 3000;
-const MAX_MISORDER: u16 = 100;
+const MAX_DROPOUT: u32 = 3000;
+const MAX_MISORDER: u32 = 100;
 
 /*
  * Per-source state information
@@ -42,7 +42,7 @@ struct RtcpSource {
     expected_prior: u32, /* packet expected at last interval */
     received_prior: u32, /* packet received at last interval */
     transit: u32,        /* relative trans time for prev pkt */
-    jitter: u32,         /* estimated jitter */
+    jitter: f64,         /* estimated jitter */
 }
 
 impl RtcpSource {
@@ -74,7 +74,7 @@ impl RtcpSource {
                 self.cycles += RTP_SEQ_MOD as u32;
             }
             self.max_seq = seq;
-        } else if delta <= RTP_SEQ_MOD as u16 - MAX_MISORDER as u16 {
+        } else if delta as u32 <= RTP_SEQ_MOD - MAX_MISORDER {
             if seq == self.bad_seq as u16 {
                 /*
                  * Two sequential packets -- assume that the other side
@@ -83,7 +83,7 @@ impl RtcpSource {
                  */
                 self.init_seq(seq);
             } else {
-                self.bad_seq = ((seq + 1) & (RTP_SEQ_MOD as u16 - 1)) as u32;
+                self.bad_seq = (seq as u32 + 1) & (RTP_SEQ_MOD - 1);
                 return 0;
             }
         } else {
@@ -177,12 +177,12 @@ impl RtcpContext {
 
         let received_interval = self.source.received - self.source.received_prior;
         self.source.received_prior = self.source.received;
-        let lost_interval = expected_interval - received_interval;
+        let lost_interval = expected_interval as i64 - received_interval as i64;
 
         let fraction = if expected_interval == 0 || lost_interval < 0 {
             0
         } else {
-            (lost_interval << 8) / expected_interval
+            ((lost_interval as u32) << 8) / expected_interval
         };
 
         let delay = utils::current_time() - self.sr_clock_time;
@@ -210,6 +210,8 @@ impl RtcpContext {
             header: RtcpHeader {
                 payload_type: RTCP_RR,
                 report_count: 1,
+                version: 2,
+                length: (4 + 1 * 24) / 4,
                 ..Default::default()
             },
             report_blocks: blocks,
@@ -235,5 +237,22 @@ impl RtcpContext {
         if 0 == self.source.update_sequence(pkt.header.seq_number) {
             return;
         }
+
+        let rtp_clock = utils::current_time();
+        if self.last_rtp_clock == 0 {
+            self.source.jitter = 0.;
+        } else {
+            let mut d = ((rtp_clock - self.last_rtp_clock) * self.sample_rate as u64 / 1000000)
+                as i64
+                - (pkt.header.timestamp - self.last_rtp_timestamp) as i64;
+
+            if d < 0 {
+                d = -d;
+            }
+            self.source.jitter += (d as f64 - self.source.jitter) / 16.;
+        }
+
+        self.last_rtp_clock = rtp_clock;
+        self.last_rtp_timestamp = pkt.header.timestamp;
     }
 }

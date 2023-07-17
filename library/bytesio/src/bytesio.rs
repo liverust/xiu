@@ -19,11 +19,17 @@ use async_trait::async_trait;
 use std::net::SocketAddr;
 use tokio::net::UdpSocket;
 
+pub enum NetType {
+    TCP,
+    UDP,
+}
+
 #[async_trait]
 pub trait TNetIO: Send + Sync {
     async fn write(&mut self, bytes: Bytes) -> Result<(), BytesIOError>;
     async fn read(&mut self) -> Result<BytesMut, BytesIOError>;
     async fn read_timeout(&mut self, duration: Duration) -> Result<BytesMut, BytesIOError>;
+    fn get_net_type(&self) -> NetType;
 }
 
 pub struct UdpIO {
@@ -57,6 +63,10 @@ impl UdpIO {
 
 #[async_trait]
 impl TNetIO for UdpIO {
+    fn get_net_type(&self) -> NetType {
+        NetType::UDP
+    }
+
     async fn write(&mut self, bytes: Bytes) -> Result<(), BytesIOError> {
         self.socket.send(bytes.as_ref()).await?;
         Ok(())
@@ -110,6 +120,10 @@ impl TcpIO {
 
 #[async_trait]
 impl TNetIO for TcpIO {
+    fn get_net_type(&self) -> NetType {
+        NetType::TCP
+    }
+
     async fn write(&mut self, bytes: Bytes) -> Result<(), BytesIOError> {
         self.stream.send(bytes).await?;
 
