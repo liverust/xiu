@@ -116,8 +116,8 @@ pub type InformationReceiver = mpsc::UnboundedReceiver<Information>;
 pub type StreamHubEventSender = mpsc::UnboundedSender<StreamHubEvent>;
 pub type StreamHubEventReceiver = mpsc::UnboundedReceiver<StreamHubEvent>;
 
-pub type ClientEventProducer = broadcast::Sender<ClientEvent>;
-pub type ClientEventConsumer = broadcast::Receiver<ClientEvent>;
+pub type BroadcastEventSender = broadcast::Sender<BroadcastEvent>;
+pub type BroadcastEventReceiver = broadcast::Receiver<BroadcastEvent>;
 
 pub type TransmitterEventProducer = mpsc::UnboundedSender<TransmitterEvent>;
 pub type TransmitterEventConsumer = mpsc::UnboundedReceiver<TransmitterEvent>;
@@ -204,7 +204,7 @@ impl fmt::Display for TransmitterEvent {
 }
 
 #[derive(Debug, Clone)]
-pub enum ClientEvent {
+pub enum BroadcastEvent {
     /*Need publish(push) a stream to other rtmp server*/
     Publish { identifier: StreamIdentifier },
     UnPublish { identifier: StreamIdentifier },
