@@ -85,27 +85,22 @@ impl RtspTrack {
     }
     //send and receive rtcp data in a UDP channel
     pub async fn rtcp_receive_loop(&mut self, rtcp_io: Arc<Mutex<Box<dyn TNetIO + Send + Sync>>>) {
-        log::info!("rtcp data:rtcp_receive_loop");
         let rtcp_channel_out = self.rtcp_channel.clone();
+
         tokio::spawn(async move {
             let mut reader = BytesReader::new(BytesMut::new());
-            log::info!("rtcp data:rtcp_receive_loop 1");
             let mut rtcp_channel_in = rtcp_channel_out.lock().await;
-            log::info!("rtcp data:rtcp_receive_loop 2");
+
             loop {
-                log::info!("rtcp data:rtcp_receive_loop 3");
-                let mut io_guard = rtcp_io.lock().await;
-                match io_guard.read().await {
-                    Ok(data) => {
-                        log::info!("rtcp data:rtcp_receive_loop 4");
-                        reader.extend_from_slice(&data[..]);
-                        rtcp_channel_in.on_rtcp(&mut reader, rtcp_io.clone()).await;
-                    }
+                let data = match rtcp_io.lock().await.read().await {
+                    Ok(data) => data,
                     Err(err) => {
                         log::error!("read error: {:?}", err);
                         break;
                     }
-                }
+                };
+                reader.extend_from_slice(&data[..]);
+                rtcp_channel_in.on_rtcp(&mut reader, rtcp_io.clone()).await;
             }
         });
     }
@@ -117,7 +112,7 @@ impl RtspTrack {
                 .await
                 .set_channel_identifier(interleaveds[1]);
         } else {
-            log::error!("set_transport:should not be here!!!");
+            log::info!("it is a udp transport!!!");
         }
 
         self.transport = transport;

@@ -350,7 +350,7 @@ impl RtspServerSession {
                                 };
 
                             let address = rtsp_request.address.clone();
-                            if let Some(rtp_io) = UdpIO::new(address.clone(), rtp_port).await {
+                            if let Some(rtp_io) = UdpIO::new(address.clone(), rtp_port, 0).await {
                                 rtp_server_port = rtp_io.get_local_port();
 
                                 let box_udp_io: Box<dyn TNetIO + Send + Sync> = Box::new(rtp_io);
@@ -362,7 +362,10 @@ impl RtspServerSession {
                                 }
                             }
 
-                            if let Some(rtcp_io) = UdpIO::new(address.clone(), rtcp_port).await {
+                            if let Some(rtcp_io) =
+                                UdpIO::new(address.clone(), rtcp_port, rtp_server_port.unwrap() + 1)
+                                    .await
+                            {
                                 rtcp_server_port = rtcp_io.get_local_port();
                                 let box_rtcp_io: Arc<Mutex<Box<dyn TNetIO + Send + Sync>>> =
                                     Arc::new(Mutex::new(Box::new(rtcp_io)));

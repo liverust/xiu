@@ -37,9 +37,11 @@ pub struct UdpIO {
 }
 
 impl UdpIO {
-    pub async fn new(remote_domain: String, remote_port: u16) -> Option<Self> {
+    pub async fn new(remote_domain: String, remote_port: u16, local_port: u16) -> Option<Self> {
         let remote_address = format!("{}:{}", remote_domain, remote_port);
-        if let Ok(local_socket) = UdpSocket::bind("0.0.0.0:0").await {
+        log::info!("remote address: {}", remote_address);
+        let local_address = format!("0.0.0.0:{}", local_port);
+        if let Ok(local_socket) = UdpSocket::bind(local_address).await {
             if let Ok(remote_socket_addr) = remote_address.parse::<SocketAddr>() {
                 if let Err(err) = local_socket.connect(remote_socket_addr).await {
                     log::info!("connect to remote udp socket error: {}", err);
@@ -54,6 +56,7 @@ impl UdpIO {
     }
     pub fn get_local_port(&self) -> Option<u16> {
         if let Ok(local_addr) = self.socket.local_addr() {
+            log::info!("local address: {}", local_addr);
             return Some(local_addr.port());
         }
 

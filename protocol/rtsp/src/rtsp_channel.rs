@@ -171,13 +171,11 @@ impl RtcpChannel {
         reader: &mut BytesReader,
         rtcp_io: Arc<Mutex<Box<dyn TNetIO + Send + Sync>>>,
     ) {
-        log::info!("sender report 0");
         let mut reader_clone = BytesReader::new(reader.get_remaining_bytes());
         if let Ok(rtcp_header) = RtcpHeader::unmarshal(&mut reader_clone) {
             match rtcp_header.payload_type {
                 RTCP_SR => {
                     if let Ok(sr) = RtcpSenderReport::unmarshal(reader) {
-                        log::info!("sender report");
                         self.recv_ctx.received_sr(&sr);
                         self.send_rr(rtcp_io).await;
                     }
@@ -195,8 +193,8 @@ impl RtcpChannel {
         &mut self,
         rtcp_io: Arc<Mutex<Box<dyn TNetIO + Send + Sync>>>,
     ) -> Result<(), BytesWriteError> {
-        log::info!("send receive report");
         let rr = self.recv_ctx.generate_rr();
+
         let net_type = rtcp_io.lock().await.get_net_type();
         if let Ok(msg) = rr.marshal() {
             let mut bytes_writer = AsyncBytesWriter::new(rtcp_io);
