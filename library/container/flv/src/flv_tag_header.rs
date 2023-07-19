@@ -1,11 +1,20 @@
+use std::hash::Hasher;
+
+use bytesio::bytes_writer::BytesWriter;
+
 use {
-    super::{define, errors::FlvDemuxerError},
+    super::{
+        define,
+        errors::{FlvDemuxerError, FlvMuxerError},
+    },
+    super::{Marshal, Unmarshal},
     bytes::BytesMut,
     bytesio::bytes_reader::BytesReader,
 };
 
 #[derive(Clone, Debug)]
 pub struct AudioTagHeader {
+    //1010 11 1 1
     /*
         SoundFormat: UB[4]
         0 = Linear PCM, platform endian
@@ -73,38 +82,44 @@ impl AudioTagHeader {
     }
 }
 
-pub struct AudioTagHeaderDemuxer {
-    bytes_reader: BytesReader,
-    tag: AudioTagHeader,
-}
+impl Unmarshal<&mut BytesReader, Result<Self, FlvDemuxerError>> for AudioTagHeader {
+    fn unmarshal(reader: &mut BytesReader) -> Result<Self, FlvDemuxerError>
+    where
+        Self: Sized,
+    {
+        let mut tag_header = AudioTagHeader::defalut();
 
-impl AudioTagHeaderDemuxer {
-    pub fn new(data: BytesMut) -> Self {
-        Self {
-            bytes_reader: BytesReader::new(data),
-            tag: AudioTagHeader::defalut(),
-        }
-    }
+        let flags = reader.read_u8()?;
+        tag_header.sound_format = flags >> 4;
+        tag_header.sound_rate = (flags >> 2) & 0x03;
+        tag_header.sound_size = (flags >> 1) & 0x01;
+        tag_header.sound_type = flags & 0x01;
 
-    pub fn parse_tag_header(&mut self) -> Result<AudioTagHeader, FlvDemuxerError> {
-        let flags = self.bytes_reader.read_u8()?;
-
-        self.tag.sound_format = flags >> 4;
-        self.tag.sound_rate = (flags >> 2) & 0x03;
-        self.tag.sound_size = (flags >> 1) & 0x01;
-        self.tag.sound_type = flags & 0x01;
-
-        if self.tag.sound_format == define::SoundFormat::AAC as u8 {
-            self.tag.aac_packet_type = self.bytes_reader.read_u8()?;
+        if tag_header.sound_format == define::SoundFormat::AAC as u8 {
+            tag_header.aac_packet_type = reader.read_u8()?;
         }
 
-        Ok(self.tag.clone())
-    }
-
-    pub fn get_remaining_bytes(&mut self) -> BytesMut {
-        self.bytes_reader.extract_remaining_bytes()
+        Ok(tag_header)
     }
 }
+
+impl Marshal<Result<BytesMut, FlvMuxerError>> for AudioTagHeader {
+    fn marshal(&self) -> Result<BytesMut, FlvMuxerError> {
+        let mut writer = BytesWriter::default();
+
+        let byte_1st =
+            self.sound_format << 4 | self.sound_rate << 2 | self.sound_size << 1 | self.sound_type;
+
+        writer.write_u8(byte_1st)?;
+
+        if self.sound_format == define::SoundFormat::AAC as u8 {
+            writer.write_u8(self.aac_packet_type)?;
+        }
+
+        Ok(writer.extract_current_bytes())
+    }
+}
+
 #[derive(Clone)]
 pub struct VideoTagHeader {
     /*
@@ -146,50 +161,63 @@ impl VideoTagHeader {
     }
 }
 
-pub struct VideoTagHeaderDemuxer {
-    bytes_reader: BytesReader,
-    tag: VideoTagHeader,
-}
+impl Unmarshal<&mut BytesReader, Result<Self, FlvDemuxerError>> for VideoTagHeader {
+    fn unmarshal(reader: &mut BytesReader) -> Result<Self, FlvDemuxerError>
+    where
+        Self: Sized,
+    {
+        let mut tag_header = VideoTagHeader::defalut();
 
-impl VideoTagHeaderDemuxer {
-    pub fn new(data: BytesMut) -> Self {
-        Self {
-            bytes_reader: BytesReader::new(data),
-            tag: VideoTagHeader::defalut(),
-        }
-    }
+        let flags = reader.read_u8()?;
+        tag_header.frame_type = flags >> 4;
+        tag_header.codec_id = flags & 0x0f;
 
-    pub fn parse_tag_header(&mut self) -> Result<VideoTagHeader, FlvDemuxerError> {
-        let flags = self.bytes_reader.read_u8()?;
-
-        self.tag.frame_type = flags >> 4;
-        self.tag.codec_id = flags & 0x0f;
-
-        if self.tag.codec_id == define::AvcCodecId::H264 as u8
-            || self.tag.codec_id == define::AvcCodecId::HEVC as u8
+        if tag_header.codec_id == define::AvcCodecId::H264 as u8
+            || tag_header.codec_id == define::AvcCodecId::HEVC as u8
         {
-            self.tag.avc_packet_type = self.bytes_reader.read_u8()?;
-            self.tag.composition_time = 0;
+            tag_header.avc_packet_type = reader.read_u8()?;
+            tag_header.composition_time = 0;
 
             //bigend 3bytes
             for _ in 0..3 {
-                let time = self.bytes_reader.read_u8()?;
+                let time = reader.read_u8()?;
                 //print!("==time0=={}\n", time);
                 //print!("==time1=={}\n", self.tag.composition_time);
-                self.tag.composition_time = (self.tag.composition_time << 8) + time as i32;
+                tag_header.composition_time = (tag_header.composition_time << 8) + time as i32;
             }
             //transfer to signed i24
-            if self.tag.composition_time & (1 << 23) != 0 {
+            if tag_header.composition_time & (1 << 23) != 0 {
                 let sign_extend_mask = 0xff_ff << 23;
                 // Sign extend the value
-                self.tag.composition_time = (self.tag.composition_time | sign_extend_mask) as i32
+                tag_header.composition_time =
+                    (tag_header.composition_time | sign_extend_mask) as i32
             }
         }
 
-        Ok(self.tag.clone())
+        Ok(tag_header)
     }
+}
 
-    pub fn get_remaining_bytes(&mut self) -> BytesMut {
-        self.bytes_reader.extract_remaining_bytes()
+impl Marshal<Result<BytesMut, FlvMuxerError>> for VideoTagHeader {
+    fn marshal(&self) -> Result<BytesMut, FlvMuxerError> {
+        let mut writer = BytesWriter::default();
+
+        let byte_1st = self.frame_type << 4 | self.codec_id;
+
+        writer.write_u8(byte_1st)?;
+
+        if self.codec_id == define::AvcCodecId::H264 as u8
+            || self.codec_id == define::AvcCodecId::HEVC as u8
+        {
+            writer.write_u8(self.avc_packet_type)?;
+
+            let mut cts = self.composition_time;
+            for _ in 0..3 {
+                writer.write_u8((cts & 0xFF) as u8)?;
+                cts >>= 8;
+            }
+        }
+
+        Ok(writer.extract_current_bytes())
     }
 }

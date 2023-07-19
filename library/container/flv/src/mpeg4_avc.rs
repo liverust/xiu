@@ -1,10 +1,12 @@
 use {
-    super::{define::h264_nal_type, errors::MpegAvcError},
+    super::{define::h264_nal_type, errors::MpegAvcError, Marshal, Unmarshal},
     byteorder::BigEndian,
     bytes::BytesMut,
     bytesio::{bytes_reader::BytesReader, bytes_writer::BytesWriter},
     std::vec::Vec,
 };
+
+use crate::mpeg4_aac::Mpeg4Aac;
 
 use super::errors::MpegErrorValue;
 use h264_decoder::sps::SpsParser;
@@ -51,6 +53,7 @@ impl Pps {
     }
 }
 
+#[derive(Default)]
 pub struct Mpeg4Avc {
     pub profile: u8,
     compatibility: u8,
@@ -90,11 +93,11 @@ pub fn print(data: BytesMut) {
     println!("===========")
 }
 
-impl Default for Mpeg4Avc {
-    fn default() -> Self {
-        Self::new()
-    }
-}
+// impl Default for Mpeg4Avc {
+//     fn default() -> Self {
+//         Self::new()
+//     }
+// }
 
 impl Mpeg4Avc {
     pub fn new() -> Self {
@@ -123,8 +126,6 @@ impl Mpeg4Avc {
 }
 
 pub struct Mpeg4AvcProcessor {
-    pub bytes_reader: BytesReader,
-    pub bytes_writer: BytesWriter,
     pub mpeg4_avc: Mpeg4Avc,
 }
 
@@ -137,15 +138,8 @@ impl Default for Mpeg4AvcProcessor {
 impl Mpeg4AvcProcessor {
     pub fn new() -> Self {
         Self {
-            bytes_reader: BytesReader::new(BytesMut::new()),
-            bytes_writer: BytesWriter::new(),
             mpeg4_avc: Mpeg4Avc::new(),
         }
-    }
-
-    pub fn extend_data(&mut self, data: BytesMut) -> &mut Self {
-        self.bytes_reader.extend_from_slice(&data[..]);
-        self
     }
 
     pub fn clear_sps_data(&mut self) {
@@ -158,20 +152,23 @@ impl Mpeg4AvcProcessor {
         self.mpeg4_avc.pps_annexb_data.clear();
     }
 
-    pub fn decoder_configuration_record_load(&mut self) -> Result<&mut Self, MpegAvcError> {
+    pub fn decoder_configuration_record_load(
+        &mut self,
+        bytes_reader: &mut BytesReader,
+    ) -> Result<&mut Self, MpegAvcError> {
         /*version */
-        self.bytes_reader.read_u8()?;
+        bytes_reader.read_u8()?;
         /*avc profile*/
-        self.mpeg4_avc.profile = self.bytes_reader.read_u8()?;
+        self.mpeg4_avc.profile = bytes_reader.read_u8()?;
         /*avc compatibility*/
-        self.mpeg4_avc.compatibility = self.bytes_reader.read_u8()?;
+        self.mpeg4_avc.compatibility = bytes_reader.read_u8()?;
         /*avc level*/
-        self.mpeg4_avc.level = self.bytes_reader.read_u8()?;
+        self.mpeg4_avc.level = bytes_reader.read_u8()?;
         /*nalu length*/
-        self.mpeg4_avc.nalu_length = (self.bytes_reader.read_u8()? & 0x03) + 1;
+        self.mpeg4_avc.nalu_length = (bytes_reader.read_u8()? & 0x03) + 1;
 
         /*number of SPS NALUs */
-        self.mpeg4_avc.nb_sps = self.bytes_reader.read_u8()? & 0x1F;
+        self.mpeg4_avc.nb_sps = bytes_reader.read_u8()? & 0x1F;
 
         if self.mpeg4_avc.nb_sps > 0 {
             self.clear_sps_data();
@@ -179,11 +176,11 @@ impl Mpeg4AvcProcessor {
 
         for i in 0..self.mpeg4_avc.nb_sps as usize {
             /*SPS size*/
-            let sps_data_size = self.bytes_reader.read_u16::<BigEndian>()?;
+            let sps_data_size = bytes_reader.read_u16::<BigEndian>()?;
             let sps_data = Sps {
                 size: sps_data_size,
                 /*SPS data*/
-                data: self.bytes_reader.read_bytes(sps_data_size as usize)?,
+                data: bytes_reader.read_bytes(sps_data_size as usize)?,
             };
 
             let mut sps_reader = BytesReader::new(sps_data.clone().data);
@@ -213,17 +210,17 @@ impl Mpeg4AvcProcessor {
                 .write(&self.mpeg4_avc.sps[i].data[..])?;
         }
         /*number of PPS NALUs*/
-        self.mpeg4_avc.nb_pps = self.bytes_reader.read_u8()?;
+        self.mpeg4_avc.nb_pps = bytes_reader.read_u8()?;
 
         if self.mpeg4_avc.nb_pps > 0 {
             self.clear_pps_data();
         }
 
         for i in 0..self.mpeg4_avc.nb_pps as usize {
-            let pps_data_size = self.bytes_reader.read_u16::<BigEndian>()?;
+            let pps_data_size = bytes_reader.read_u16::<BigEndian>()?;
             let pps_data = Pps {
                 size: pps_data_size,
-                data: self.bytes_reader.read_bytes(pps_data_size as usize)?,
+                data: bytes_reader.read_bytes(pps_data_size as usize)?,
             };
 
             self.mpeg4_avc.pps.push(pps_data);
@@ -234,99 +231,89 @@ impl Mpeg4AvcProcessor {
                 .write(&self.mpeg4_avc.pps[i].data[..])?;
         }
         /*clear the left bytes*/
-        self.bytes_reader.extract_remaining_bytes();
+        bytes_reader.extract_remaining_bytes();
 
         Ok(self)
     }
     //https://stackoverflow.com/questions/28678615/efficiently-insert-or-replace-multiple-elements-in-the-middle-or-at-the-beginnin
-    pub fn h264_mp4toannexb(&mut self) -> Result<(), MpegAvcError> {
-        let mut sps_pps_flag = false;
+    pub fn h264_mp4toannexb(
+        &mut self,
+        bytes_reader: &mut BytesReader,
+    ) -> Result<BytesMut, MpegAvcError> {
+        let mut bytes_writer = BytesWriter::new();
 
-        while !self.bytes_reader.is_empty() {
-            let size = self.get_nalu_size()?;
-            let nalu_type = self.bytes_reader.advance_u8()? & 0x1f;
+        let mut sps_pps_flag = false;
+        while !bytes_reader.is_empty() {
+            let size = self.get_nalu_size(bytes_reader)?;
+            let nalu_type = bytes_reader.advance_u8()? & 0x1f;
 
             match nalu_type {
                 h264_nal_type::H264_NAL_PPS | h264_nal_type::H264_NAL_SPS => {
                     sps_pps_flag = true;
                 }
-
                 h264_nal_type::H264_NAL_IDR => {
                     if !sps_pps_flag {
                         sps_pps_flag = true;
 
-                        self.bytes_writer
+                        bytes_writer
                             .prepend(&self.mpeg4_avc.pps_annexb_data.get_current_bytes()[..])?;
-                        self.bytes_writer
+                        bytes_writer
                             .prepend(&self.mpeg4_avc.sps_annexb_data.get_current_bytes()[..])?;
                     }
                 }
-
                 _ => {}
             }
 
-            self.bytes_writer.write(&H264_START_CODE)?;
-            let data = self.bytes_reader.read_bytes(size as usize)?;
-            self.bytes_writer.write(&data[..])?;
+            bytes_writer.write(&H264_START_CODE)?;
+            let data = bytes_reader.read_bytes(size as usize)?;
+            bytes_writer.write(&data[..])?;
         }
 
-        Ok(())
+        Ok(bytes_writer.extract_current_bytes())
     }
 
-    pub fn get_nalu_size(&mut self) -> Result<u32, MpegAvcError> {
+    pub fn get_nalu_size(&mut self, bytes_reader: &mut BytesReader) -> Result<u32, MpegAvcError> {
         let mut size: u32 = 0;
 
         for _ in 0..self.mpeg4_avc.nalu_length {
-            size = self.bytes_reader.read_u8()? as u32 + (size << 8);
+            size = bytes_reader.read_u8()? as u32 + (size << 8);
         }
         Ok(size)
     }
-}
 
-pub struct Mpeg4AvcWriter {
-    pub bytes_writer: BytesWriter,
-    pub mpeg4_avc: Mpeg4Avc,
-}
+    pub fn decoder_configuration_record_save(&mut self) -> Result<BytesMut, MpegAvcError> {
+        let mut bytes_writer = BytesWriter::new();
 
-impl Mpeg4AvcWriter {
-    pub fn decoder_configuration_record_save(&mut self) -> Result<(), MpegAvcError> {
-        self.bytes_writer.write_u8(1)?;
-        self.bytes_writer.write_u8(self.mpeg4_avc.profile)?;
-
-        self.bytes_writer.write_u8(self.mpeg4_avc.compatibility)?;
-        self.bytes_writer.write_u8(self.mpeg4_avc.level)?;
-        self.bytes_writer
-            .write_u8((self.mpeg4_avc.nalu_length - 1) | 0xFC)?;
+        bytes_writer.write_u8(1)?;
+        bytes_writer.write_u8(self.mpeg4_avc.profile)?;
+        bytes_writer.write_u8(self.mpeg4_avc.compatibility)?;
+        bytes_writer.write_u8(self.mpeg4_avc.level)?;
+        bytes_writer.write_u8((self.mpeg4_avc.nalu_length - 1) | 0xFC)?;
 
         //sps
-        self.bytes_writer.write_u8(self.mpeg4_avc.nb_sps | 0xE0)?;
+        bytes_writer.write_u8(self.mpeg4_avc.nb_sps | 0xE0)?;
         for i in 0..self.mpeg4_avc.nb_sps as usize {
-            self.bytes_writer
-                .write_u16::<BigEndian>(self.mpeg4_avc.sps[i].size)?;
-            self.bytes_writer.write(&self.mpeg4_avc.sps[i].data[..])?;
+            bytes_writer.write_u16::<BigEndian>(self.mpeg4_avc.sps[i].size)?;
+            bytes_writer.write(&self.mpeg4_avc.sps[i].data[..])?;
         }
 
         //pps
-        self.bytes_writer.write_u8(self.mpeg4_avc.nb_pps)?;
+        bytes_writer.write_u8(self.mpeg4_avc.nb_pps)?;
         for i in 0..self.mpeg4_avc.nb_pps as usize {
-            self.bytes_writer
-                .write_u16::<BigEndian>(self.mpeg4_avc.pps[i].size)?;
-            self.bytes_writer.write(&self.mpeg4_avc.pps[i].data[..])?
+            bytes_writer.write_u16::<BigEndian>(self.mpeg4_avc.pps[i].size)?;
+            bytes_writer.write(&self.mpeg4_avc.pps[i].data[..])?
         }
 
         match self.mpeg4_avc.profile {
             100 | 110 | 122 | 244 | 44 | 83 | 86 | 118 | 128 | 138 | 139 | 134 => {
-                self.bytes_writer
-                    .write_u8(0xFC | self.mpeg4_avc.chroma_format_idc)?;
-                self.bytes_writer
-                    .write_u8(0xF8 | self.mpeg4_avc.bit_depth_luma_minus8)?;
-                self.bytes_writer
-                    .write_u8(0xF8 | self.mpeg4_avc.bit_depth_chroma_minus8)?;
-                self.bytes_writer.write_u8(0)?;
+                bytes_writer.write_u8(0xFC | self.mpeg4_avc.chroma_format_idc)?;
+                bytes_writer.write_u8(0xF8 | self.mpeg4_avc.bit_depth_luma_minus8)?;
+                bytes_writer.write_u8(0xF8 | self.mpeg4_avc.bit_depth_chroma_minus8)?;
+                bytes_writer.write_u8(0)?;
             }
             _ => {}
         }
 
-        Ok(())
+        Ok(bytes_writer.extract_current_bytes())
     }
 }
