@@ -6,23 +6,15 @@ use {
     std::vec::Vec,
 };
 
-use crate::mpeg4_aac::Mpeg4Aac;
-
 use super::errors::MpegErrorValue;
 use h264_decoder::sps::SpsParser;
 
 const H264_START_CODE: [u8; 4] = [0x00, 0x00, 0x00, 0x01];
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct Sps {
     pub size: u16,
     pub data: BytesMut,
-}
-
-impl Default for Sps {
-    fn default() -> Self {
-        Self::new()
-    }
 }
 
 impl Sps {
@@ -33,15 +25,11 @@ impl Sps {
         }
     }
 }
+
+#[derive(Clone, Default)]
 pub struct Pps {
     pub size: u16,
     pub data: BytesMut,
-}
-
-impl Default for Pps {
-    fn default() -> Self {
-        Self::new()
-    }
 }
 
 impl Pps {
@@ -93,12 +81,6 @@ pub fn print(data: BytesMut) {
     println!("===========")
 }
 
-// impl Default for Mpeg4Avc {
-//     fn default() -> Self {
-//         Self::new()
-//     }
-// }
-
 impl Mpeg4Avc {
     pub fn new() -> Self {
         Self {
@@ -125,14 +107,9 @@ impl Mpeg4Avc {
     }
 }
 
+#[derive(Default)]
 pub struct Mpeg4AvcProcessor {
     pub mpeg4_avc: Mpeg4Avc,
-}
-
-impl Default for Mpeg4AvcProcessor {
-    fn default() -> Self {
-        Self::new()
-    }
 }
 
 impl Mpeg4AvcProcessor {
@@ -224,7 +201,6 @@ impl Mpeg4AvcProcessor {
             };
 
             self.mpeg4_avc.pps.push(pps_data);
-
             self.mpeg4_avc.pps_annexb_data.write(&H264_START_CODE)?;
             self.mpeg4_avc
                 .pps_annexb_data

@@ -1,20 +1,22 @@
 pub mod errors;
-pub mod session;
+pub mod rtsp2rtmp;
 
 use streamhub::{
     define::{BroadcastEvent, BroadcastEventReceiver, StreamHubEventSender},
     stream::StreamIdentifier,
 };
 
-use self::errors::RemuxerError;
+use self::errors::RtmpRemuxerError;
 
-pub struct Rtsp2RtmpRemuxer {
+//Receive publish event from stream hub and
+//remux from other protocols to rtmp
+pub struct RtmpRemuxer {
     receiver: BroadcastEventReceiver,
     event_producer: StreamHubEventSender,
 }
 
-impl Rtsp2RtmpRemuxer {
-    pub async fn run(&mut self) -> Result<(), RemuxerError> {
+impl RtmpRemuxer {
+    pub async fn run(&mut self) -> Result<(), RtmpRemuxerError> {
         loop {
             let val = self.receiver.recv().await?;
             match val {

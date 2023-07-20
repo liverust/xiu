@@ -1,5 +1,3 @@
-use std::hash::Hasher;
-
 use bytesio::bytes_writer::BytesWriter;
 
 use {
@@ -109,7 +107,6 @@ impl Marshal<Result<BytesMut, FlvMuxerError>> for AudioTagHeader {
 
         let byte_1st =
             self.sound_format << 4 | self.sound_rate << 2 | self.sound_size << 1 | self.sound_type;
-
         writer.write_u8(byte_1st)?;
 
         if self.sound_format == define::SoundFormat::AAC as u8 {
@@ -203,7 +200,6 @@ impl Marshal<Result<BytesMut, FlvMuxerError>> for VideoTagHeader {
         let mut writer = BytesWriter::default();
 
         let byte_1st = self.frame_type << 4 | self.codec_id;
-
         writer.write_u8(byte_1st)?;
 
         if self.codec_id == define::AvcCodecId::H264 as u8

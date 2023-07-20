@@ -1593,6 +1593,7 @@ dependencies = [
  "async-trait",
  "byteorder",
  "bytes",
+ "bytesio",
  "chrono",
  "failure",
  "indexmap",

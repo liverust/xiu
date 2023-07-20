@@ -6,9 +6,9 @@ use crate::global_trait::Unmarshal;
 use crate::http::RtspResponse;
 use crate::rtp::utils::Marshal as RtpMarshal;
 
-use crate::rtp::utils::TPacker;
 use crate::rtp::RtpPacket;
 use crate::rtsp_range::RtspRange;
+use crate::sdp::fmtp::Fmtp;
 
 use crate::rtsp_codec::RtspCodecInfo;
 use crate::rtsp_track::RtspTrack;
@@ -21,6 +21,7 @@ use bytes::BytesMut;
 use bytesio::bytes_reader::BytesReader;
 use bytesio::bytes_writer::AsyncBytesWriter;
 
+use bytesio::bytes_writer::BytesWriter;
 use bytesio::bytesio::UdpIO;
 use errors::SessionError;
 use errors::SessionErrorValue;
@@ -702,7 +703,6 @@ impl RtspServerSession {
         self.writer.flush().await?;
 
         Ok(())
-        //response.
     }
 }
 
@@ -728,6 +728,48 @@ impl TStreamHandler for RtspStreamHandler {
         sender: FrameDataSender,
         sub_type: SubscribeType,
     ) -> Result<(), ChannelError> {
+        let sdp_info = self.sdp.lock().await;
+
+        for media in &sdp_info.medias {
+            let mut bytes_writer = BytesWriter::new();
+            if let Some(fmtp) = &media.fmtp {
+                match fmtp {
+                    Fmtp::H264(data) => {
+                        let sps = &data.sps;
+                        let sps_len = sps.len();
+                        let pps = &data.pps;
+                        let pps_len = pps.len();
+
+                        bytes_writer.write_u16::<BigEndian>(sps_len as u16)?;
+                        bytes_writer.write(sps)?;
+                        bytes_writer.write_u16::<BigEndian>(pps_len as u16)?;
+                        bytes_writer.write(pps)?;
+
+                        let frame_data = FrameData::Video {
+                            timestamp: 0,
+                            data: bytes_writer.extract_current_bytes(),
+                        };
+                        sender.send(frame_data);
+                    }
+                    Fmtp::H265(data) => {
+                        let sps = &data.sps;
+                        let sps_len = sps.len();
+                        let pps = &data.pps;
+                        let pps_len = pps.len();
+                        let vps = &data.vps;
+                        let vps_len = vps.len();
+
+                        bytes_writer.write_u16::<BigEndian>(sps_len as u16)?;
+                        bytes_writer.write(sps)?;
+                        bytes_writer.write_u16::<BigEndian>(pps_len as u16)?;
+                        bytes_writer.write(pps)?;
+                        bytes_writer.write_u16::<BigEndian>(vps_len as u16)?;
+                        bytes_writer.write(vps)?;
+                    }
+                    Fmtp::Mpeg4(data) => {}
+                }
+            }
+        }
         Ok(())
     }
     async fn get_statistic_data(&self) -> Option<StreamStatistics> {

@@ -70,18 +70,13 @@ use {
  reference: https://www.cnblogs.com/chyingp/p/flv-getting-started.html
 */
 
+#[derive(Default)]
 pub struct FlvDemuxerAudioData {
     pub has_data: bool,
     pub sound_format: u8,
     pub dts: i64,
     pub pts: i64,
     pub data: BytesMut,
-}
-
-impl Default for FlvDemuxerAudioData {
-    fn default() -> Self {
-        Self::new()
-    }
 }
 
 impl FlvDemuxerAudioData {
@@ -95,19 +90,13 @@ impl FlvDemuxerAudioData {
         }
     }
 }
-
+#[derive(Default)]
 pub struct FlvDemuxerVideoData {
+    pub frame_type: u8,
     pub codec_id: u8,
     pub dts: i64,
     pub pts: i64,
-    pub frame_type: u8,
     pub data: BytesMut,
-}
-
-impl Default for FlvDemuxerVideoData {
-    fn default() -> Self {
-        Self::new()
-    }
 }
 
 impl FlvDemuxerVideoData {
@@ -121,14 +110,10 @@ impl FlvDemuxerVideoData {
         }
     }
 }
+
+#[derive(Default)]
 pub struct FlvVideoTagDemuxer {
     avc_processor: Mpeg4AvcProcessor,
-}
-
-impl Default for FlvVideoTagDemuxer {
-    fn default() -> Self {
-        Self::new()
-    }
 }
 
 impl FlvVideoTagDemuxer {
@@ -174,14 +159,9 @@ impl FlvVideoTagDemuxer {
     }
 }
 
+#[derive(Default)]
 pub struct FlvAudioTagDemuxer {
     aac_processor: Mpeg4AacProcessor,
-}
-
-impl Default for FlvAudioTagDemuxer {
-    fn default() -> Self {
-        Self::new()
-    }
 }
 
 impl FlvAudioTagDemuxer {

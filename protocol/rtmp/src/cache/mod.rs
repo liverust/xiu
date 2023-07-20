@@ -1,6 +1,3 @@
-use bytesio::bytes_reader::BytesReader;
-use xflv::flv_tag_header::{AudioTagHeader, VideoTagHeader};
-
 pub mod errors;
 pub mod gop;
 pub mod metadata;
@@ -8,6 +5,7 @@ pub mod metadata;
 use {
     self::gop::Gops,
     bytes::BytesMut,
+    bytesio::bytes_reader::BytesReader,
     errors::CacheError,
     gop::Gop,
     std::collections::VecDeque,
@@ -15,7 +13,10 @@ use {
     streamhub::statistics::avstatistics::AvStatistics,
     streamhub::stream::StreamIdentifier,
     xflv::{
-        flv_tag_header, define, mpeg4_aac::Mpeg4AacProcessor, mpeg4_avc::Mpeg4AvcProcessor,
+        define,
+        flv_tag_header::{AudioTagHeader, VideoTagHeader},
+        mpeg4_aac::Mpeg4AacProcessor,
+        mpeg4_avc::Mpeg4AvcProcessor,
         Unmarshal,
     },
 };
