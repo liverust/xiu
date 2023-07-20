@@ -4,6 +4,7 @@ use super::rtsp_codec;
 use crate::global_trait::Marshal;
 use crate::global_trait::Unmarshal;
 use crate::http::RtspResponse;
+use crate::rtp::define::ANNEXB_NALU_START_CODE;
 use crate::rtp::utils::Marshal as RtpMarshal;
 
 use crate::rtp::RtpPacket;
@@ -735,38 +736,51 @@ impl TStreamHandler for RtspStreamHandler {
             if let Some(fmtp) = &media.fmtp {
                 match fmtp {
                     Fmtp::H264(data) => {
-                        let sps = &data.sps;
-                        let sps_len = sps.len();
-                        let pps = &data.pps;
-                        let pps_len = pps.len();
-
-                        bytes_writer.write_u16::<BigEndian>(sps_len as u16)?;
-                        bytes_writer.write(sps)?;
-                        bytes_writer.write_u16::<BigEndian>(pps_len as u16)?;
-                        bytes_writer.write(pps)?;
+                        bytes_writer.write(&ANNEXB_NALU_START_CODE)?;
+                        bytes_writer.write_u8(0x07)?;
+                        bytes_writer.write(&data.sps)?;
+                        bytes_writer.write(&ANNEXB_NALU_START_CODE)?;
+                        bytes_writer.write_u8(0x08)?;
+                        bytes_writer.write(&data.pps)?;
 
                         let frame_data = FrameData::Video {
                             timestamp: 0,
                             data: bytes_writer.extract_current_bytes(),
                         };
-                        sender.send(frame_data);
+                        if let Err(err) = sender.send(frame_data) {
+                            log::error!("send sps/pps error: {}", err);
+                        }
                     }
                     Fmtp::H265(data) => {
-                        let sps = &data.sps;
-                        let sps_len = sps.len();
-                        let pps = &data.pps;
-                        let pps_len = pps.len();
-                        let vps = &data.vps;
-                        let vps_len = vps.len();
+                        bytes_writer.write(&ANNEXB_NALU_START_CODE)?;
+                        bytes_writer.write_u8(0x21)?;
+                        bytes_writer.write(&data.sps)?;
+                        bytes_writer.write(&ANNEXB_NALU_START_CODE)?;
+                        bytes_writer.write_u8(0x22)?;
+                        bytes_writer.write(&data.pps)?;
+                        bytes_writer.write(&ANNEXB_NALU_START_CODE)?;
+                        bytes_writer.write_u8(0x20)?;
+                        bytes_writer.write(&data.vps)?;
 
-                        bytes_writer.write_u16::<BigEndian>(sps_len as u16)?;
-                        bytes_writer.write(sps)?;
-                        bytes_writer.write_u16::<BigEndian>(pps_len as u16)?;
-                        bytes_writer.write(pps)?;
-                        bytes_writer.write_u16::<BigEndian>(vps_len as u16)?;
-                        bytes_writer.write(vps)?;
+                        let frame_data = FrameData::Video {
+                            timestamp: 0,
+                            data: bytes_writer.extract_current_bytes(),
+                        };
+                        if let Err(err) = sender.send(frame_data) {
+                            log::error!("send sps/pps/vps error: {}", err);
+                        }
                     }
-                    Fmtp::Mpeg4(data) => {}
+                    Fmtp::Mpeg4(data) => {
+                        bytes_writer.write(&data.asc)?;
+                        let frame_data = FrameData::Audio {
+                            timestamp: 0,
+                            data: bytes_writer.extract_current_bytes(),
+                        };
+
+                        if let Err(err) = sender.send(frame_data) {
+                            log::error!("send asc error: {}", err);
+                        }
+                    }
                 }
             }
         }

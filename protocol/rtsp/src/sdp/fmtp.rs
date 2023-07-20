@@ -21,7 +21,7 @@ pub struct H265Fmtp {
 #[derive(Debug, Clone, Default)]
 pub struct Mpeg4Fmtp {
     pub payload_type: u16,
-    asc: BytesMut,
+    pub asc: BytesMut,
     profile_level_id: BytesMut,
     mode: String,
     size_length: u16,
