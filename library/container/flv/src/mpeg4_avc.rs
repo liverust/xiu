@@ -44,25 +44,25 @@ impl Pps {
 #[derive(Default)]
 pub struct Mpeg4Avc {
     pub profile: u8,
-    compatibility: u8,
+    pub compatibility: u8,
     pub level: u8,
-    nalu_length: u8,
+    pub nalu_length: u8,
     pub width: u32,
     pub height: u32,
 
-    nb_sps: u8,
-    nb_pps: u8,
+    pub nb_sps: u8,
+    pub nb_pps: u8,
 
-    sps: Vec<Sps>,
-    pps: Vec<Pps>,
+    pub sps: Vec<Sps>,
+    pub pps: Vec<Pps>,
 
-    sps_annexb_data: BytesWriter, // pice together all the sps data
-    pps_annexb_data: BytesWriter, // pice together all the pps data
+    pub sps_annexb_data: BytesWriter, // pice together all the sps data
+    pub pps_annexb_data: BytesWriter, // pice together all the pps data
 
     //extension
-    chroma_format_idc: u8,
-    bit_depth_luma_minus8: u8,
-    bit_depth_chroma_minus8: u8,
+    pub chroma_format_idc: u8,
+    pub bit_depth_luma_minus8: u8,
+    pub bit_depth_chroma_minus8: u8,
     // data: Vec<u8>, //[u8; 4 * 1024],
     // off: i32,
 }

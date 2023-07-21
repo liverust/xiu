@@ -27,6 +27,7 @@ use bytesio::bytesio::UdpIO;
 use errors::SessionError;
 use errors::SessionErrorValue;
 use http::StatusCode;
+use streamhub::define::VideoCodecType;
 
 use super::http::RtspRequest;
 use super::rtp::errors::UnPackerError;
@@ -729,61 +730,66 @@ impl TStreamHandler for RtspStreamHandler {
         sender: FrameDataSender,
         sub_type: SubscribeType,
     ) -> Result<(), ChannelError> {
-        let sdp_info = self.sdp.lock().await;
+        match sub_type {
+            SubscribeType::PlayerRtmp => {
+                let sdp_info = self.sdp.lock().await;
+                for media in &sdp_info.medias {
+                    let mut bytes_writer = BytesWriter::new();
+                    if let Some(fmtp) = &media.fmtp {
+                        match fmtp {
+                            Fmtp::H264(data) => {
+                                bytes_writer.write(&ANNEXB_NALU_START_CODE)?;
+                                bytes_writer.write_u8(0x07)?;
+                                bytes_writer.write(&data.sps)?;
+                                bytes_writer.write(&ANNEXB_NALU_START_CODE)?;
+                                bytes_writer.write_u8(0x08)?;
+                                bytes_writer.write(&data.pps)?;
 
-        for media in &sdp_info.medias {
-            let mut bytes_writer = BytesWriter::new();
-            if let Some(fmtp) = &media.fmtp {
-                match fmtp {
-                    Fmtp::H264(data) => {
-                        bytes_writer.write(&ANNEXB_NALU_START_CODE)?;
-                        bytes_writer.write_u8(0x07)?;
-                        bytes_writer.write(&data.sps)?;
-                        bytes_writer.write(&ANNEXB_NALU_START_CODE)?;
-                        bytes_writer.write_u8(0x08)?;
-                        bytes_writer.write(&data.pps)?;
+                                let frame_data = FrameData::Video {
+                                    timestamp: 0,
+                                    data: bytes_writer.extract_current_bytes(),
+                                };
+                                if let Err(err) = sender.send(frame_data) {
+                                    log::error!("send sps/pps error: {}", err);
+                                }
+                            }
+                            Fmtp::H265(data) => {
+                                bytes_writer.write(&ANNEXB_NALU_START_CODE)?;
+                                bytes_writer.write_u8(0x21)?;
+                                bytes_writer.write(&data.sps)?;
+                                bytes_writer.write(&ANNEXB_NALU_START_CODE)?;
+                                bytes_writer.write_u8(0x22)?;
+                                bytes_writer.write(&data.pps)?;
+                                bytes_writer.write(&ANNEXB_NALU_START_CODE)?;
+                                bytes_writer.write_u8(0x20)?;
+                                bytes_writer.write(&data.vps)?;
 
-                        let frame_data = FrameData::Video {
-                            timestamp: 0,
-                            data: bytes_writer.extract_current_bytes(),
-                        };
-                        if let Err(err) = sender.send(frame_data) {
-                            log::error!("send sps/pps error: {}", err);
-                        }
-                    }
-                    Fmtp::H265(data) => {
-                        bytes_writer.write(&ANNEXB_NALU_START_CODE)?;
-                        bytes_writer.write_u8(0x21)?;
-                        bytes_writer.write(&data.sps)?;
-                        bytes_writer.write(&ANNEXB_NALU_START_CODE)?;
-                        bytes_writer.write_u8(0x22)?;
-                        bytes_writer.write(&data.pps)?;
-                        bytes_writer.write(&ANNEXB_NALU_START_CODE)?;
-                        bytes_writer.write_u8(0x20)?;
-                        bytes_writer.write(&data.vps)?;
+                                let frame_data = FrameData::Video {
+                                    timestamp: 0,
+                                    data: bytes_writer.extract_current_bytes(),
+                                };
+                                if let Err(err) = sender.send(frame_data) {
+                                    log::error!("send sps/pps/vps error: {}", err);
+                                }
+                            }
+                            Fmtp::Mpeg4(data) => {
+                                bytes_writer.write(&data.asc)?;
+                                let frame_data = FrameData::Audio {
+                                    timestamp: 0,
+                                    data: bytes_writer.extract_current_bytes(),
+                                };
 
-                        let frame_data = FrameData::Video {
-                            timestamp: 0,
-                            data: bytes_writer.extract_current_bytes(),
-                        };
-                        if let Err(err) = sender.send(frame_data) {
-                            log::error!("send sps/pps/vps error: {}", err);
-                        }
-                    }
-                    Fmtp::Mpeg4(data) => {
-                        bytes_writer.write(&data.asc)?;
-                        let frame_data = FrameData::Audio {
-                            timestamp: 0,
-                            data: bytes_writer.extract_current_bytes(),
-                        };
-
-                        if let Err(err) = sender.send(frame_data) {
-                            log::error!("send asc error: {}", err);
+                                if let Err(err) = sender.send(frame_data) {
+                                    log::error!("send asc error: {}", err);
+                                }
+                            }
                         }
                     }
                 }
             }
+            _ => {}
         }
+
         Ok(())
     }
     async fn get_statistic_data(&self) -> Option<StreamStatistics> {

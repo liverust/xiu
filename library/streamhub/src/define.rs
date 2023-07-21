@@ -95,6 +95,12 @@ impl Serialize for PublisherInfo {
 }
 
 #[derive(Clone)]
+pub enum VideoCodecType {
+    H264,
+    H265,
+}
+
+#[derive(Clone)]
 pub enum FrameData {
     Video { timestamp: u32, data: BytesMut },
     Audio { timestamp: u32, data: BytesMut },

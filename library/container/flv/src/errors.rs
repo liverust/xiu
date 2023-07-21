@@ -70,6 +70,16 @@ impl fmt::Display for FlvMuxerError {
     }
 }
 
+impl Fail for FlvMuxerError {
+    fn cause(&self) -> Option<&dyn Fail> {
+        self.value.cause()
+    }
+
+    fn backtrace(&self) -> Option<&Backtrace> {
+        self.value.backtrace()
+    }
+}
+
 #[derive(Debug)]
 pub struct FlvDemuxerError {
     pub value: DemuxerErrorValue,
