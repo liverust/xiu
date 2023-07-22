@@ -129,13 +129,17 @@ impl FlvVideoTagDemuxer {
     ) -> Result<Option<FlvDemuxerVideoData>, FlvDemuxerError> {
         let mut reader = BytesReader::new(data);
 
+        log::info!("demux 0");
+
         let tag_header = VideoTagHeader::unmarshal(&mut reader)?;
         if tag_header.codec_id == AvcCodecId::H264 as u8 {
+            log::info!("demux 1");
             match tag_header.avc_packet_type {
                 avc_packet_type::AVC_SEQHDR => {
+                    log::info!("demux 2");
                     self.avc_processor
                         .decoder_configuration_record_load(&mut reader)?;
-
+                    log::info!("demux 3");
                     return Ok(None);
                 }
                 avc_packet_type::AVC_NALU => {

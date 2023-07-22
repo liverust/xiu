@@ -24,7 +24,7 @@ async fn main() -> Result<()> {
                 .value_name("path")
                 .help("Specify the xiu server configuration file path.")
                 .value_parser(value_parser!(String))
-                .conflicts_with_all(["rtmp", "httpflv", "hls", "log"]),
+                .conflicts_with_all(["rtmp", "rtsp", "httpflv", "hls", "log"]),
         )
         .arg(
             Arg::new("rtmp")
@@ -32,7 +32,8 @@ async fn main() -> Result<()> {
                 .short('r')
                 .value_name("port")
                 .help("Specify the rtmp listening port.(e.g.:1935)")
-                .value_parser(value_parser!(usize)),
+                .value_parser(value_parser!(usize))
+                .conflicts_with("config_file_path"),
         )
         .arg(
             Arg::new("rtsp")
@@ -40,7 +41,8 @@ async fn main() -> Result<()> {
                 .short('t')
                 .value_name("port")
                 .help("Specify the rtsp listening port.(e.g.:554)")
-                .value_parser(value_parser!(usize)),
+                .value_parser(value_parser!(usize))
+                .conflicts_with("config_file_path"),
         )
         .arg(
             Arg::new("httpflv")
@@ -68,12 +70,12 @@ async fn main() -> Result<()> {
                 .help("Specify the log level.")
                 .value_parser(log_levels)
                 .conflicts_with("config_file_path"),
-        )
-        .group(
-            ArgGroup::new("vers")
-                .args(["config_file_path", "rtmp", "rtsp"])
-                .required(true),
         );
+    // .group(
+    //     ArgGroup::new("vers")
+    //         .args(["config_file_path", "rtmp", "rtsp"])
+    //         .required(true).,
+    // );
 
     let args: Vec<String> = env::args().collect();
     if 1 == args.len() {

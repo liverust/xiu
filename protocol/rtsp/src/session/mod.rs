@@ -9,6 +9,7 @@ use crate::rtp::utils::Marshal as RtpMarshal;
 
 use crate::rtp::RtpPacket;
 use crate::rtsp_range::RtspRange;
+use crate::rtsp_utils;
 use crate::sdp::fmtp::Fmtp;
 
 use crate::rtsp_codec::RtspCodecInfo;
@@ -732,6 +733,7 @@ impl TStreamHandler for RtspStreamHandler {
     ) -> Result<(), ChannelError> {
         match sub_type {
             SubscribeType::PlayerRtmp => {
+                log::info!("send rtsp cache data");
                 let sdp_info = self.sdp.lock().await;
                 for media in &sdp_info.medias {
                     let mut bytes_writer = BytesWriter::new();
@@ -739,10 +741,8 @@ impl TStreamHandler for RtspStreamHandler {
                         match fmtp {
                             Fmtp::H264(data) => {
                                 bytes_writer.write(&ANNEXB_NALU_START_CODE)?;
-                                bytes_writer.write_u8(0x07)?;
                                 bytes_writer.write(&data.sps)?;
                                 bytes_writer.write(&ANNEXB_NALU_START_CODE)?;
-                                bytes_writer.write_u8(0x08)?;
                                 bytes_writer.write(&data.pps)?;
 
                                 let frame_data = FrameData::Video {
@@ -755,13 +755,10 @@ impl TStreamHandler for RtspStreamHandler {
                             }
                             Fmtp::H265(data) => {
                                 bytes_writer.write(&ANNEXB_NALU_START_CODE)?;
-                                bytes_writer.write_u8(0x21)?;
                                 bytes_writer.write(&data.sps)?;
                                 bytes_writer.write(&ANNEXB_NALU_START_CODE)?;
-                                bytes_writer.write_u8(0x22)?;
                                 bytes_writer.write(&data.pps)?;
                                 bytes_writer.write(&ANNEXB_NALU_START_CODE)?;
-                                bytes_writer.write_u8(0x20)?;
                                 bytes_writer.write(&data.vps)?;
 
                                 let frame_data = FrameData::Video {
@@ -773,11 +770,12 @@ impl TStreamHandler for RtspStreamHandler {
                                 }
                             }
                             Fmtp::Mpeg4(data) => {
-                                bytes_writer.write(&data.asc)?;
                                 let frame_data = FrameData::Audio {
                                     timestamp: 0,
-                                    data: bytes_writer.extract_current_bytes(),
+                                    data: data.asc.clone(),
                                 };
+
+                                rtsp_utils::print("send asc", data.asc.clone());
 
                                 if let Err(err) = sender.send(frame_data) {
                                     log::error!("send asc error: {}", err);

@@ -136,6 +136,7 @@ pub struct StreamsHub {
     //The rtmp static push/pull and the hls transfer is triggered actively,
     //add a control switches separately.
     rtmp_push_enabled: bool,
+    rtmp_remuxer_enabled: bool,
     //enable rtmp pull
     rtmp_pull_enabled: bool,
     //enable hls
@@ -157,6 +158,7 @@ impl StreamsHub {
             client_event_producer: client_producer,
             rtmp_push_enabled: false,
             rtmp_pull_enabled: false,
+            rtmp_remuxer_enabled: false,
             hls_enabled: false,
             notifier,
         }
@@ -171,6 +173,10 @@ impl StreamsHub {
 
     pub fn set_rtmp_pull_enabled(&mut self, enabled: bool) {
         self.rtmp_pull_enabled = enabled;
+    }
+
+    pub fn set_rtmp_remuxer_enabled(&mut self, enabled: bool) {
+        self.rtmp_remuxer_enabled = enabled;
     }
 
     pub fn set_hls_enabled(&mut self, enabled: bool) {
@@ -462,7 +468,7 @@ impl StreamsHub {
 
         self.streams.insert(identifier.clone(), event_publisher);
 
-        if self.rtmp_push_enabled || self.hls_enabled {
+        if self.rtmp_push_enabled || self.hls_enabled || self.rtmp_remuxer_enabled {
             let client_event = BroadcastEvent::Publish { identifier };
 
             //send publish info to push clients

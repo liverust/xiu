@@ -1,10 +1,11 @@
+use crate::utils;
 use bytes::BytesMut;
 use bytesio::{bytes_reader::BytesReader, bytes_writer::BytesWriter};
 use h264_decoder::sps::SpsParser;
 use indexmap::IndexMap;
 use xflv::{
     define::h264_nal_type::{H264_NAL_PPS, H264_NAL_SPS},
-    flv_tag_header::VideoTagHeader,
+    flv_tag_header::{AudioTagHeader, VideoTagHeader},
     mpeg4_aac::Mpeg4AacProcessor,
     mpeg4_avc::{Mpeg4Avc, Mpeg4AvcProcessor, Pps, Sps},
     Marshal,
@@ -49,7 +50,7 @@ pub fn find_start_code(nalus: &[u8]) -> Option<usize> {
 }
 
 impl Rtsp2RtmpRemuxerSession {
-    pub fn new(stream_path: String, event_producer: StreamHubEventSender, duration: i64) -> Self {
+    pub fn new(stream_path: String, event_producer: StreamHubEventSender) -> Self {
         let (_, data_consumer) = mpsc::unbounded_channel();
 
         let eles: Vec<&str> = stream_path.splitn(2, '/').collect();
@@ -76,6 +77,7 @@ impl Rtsp2RtmpRemuxerSession {
     }
 
     pub async fn run(&mut self) -> Result<(), RtmpRemuxerError> {
+        self.publish_rtmp().await?;
         self.subscribe_rtsp().await?;
         self.receive_rtsp_data().await?;
 
@@ -111,8 +113,16 @@ impl Rtsp2RtmpRemuxerSession {
         loop {
             if let Some(data) = self.data_receiver.recv().await {
                 match data {
-                    FrameData::Audio { timestamp, data } => {}
-                    FrameData::Video { timestamp, data } => {}
+                    FrameData::Audio {
+                        timestamp,
+                        mut data,
+                    } => self.on_rtsp_audio(&mut data, timestamp).await?,
+                    FrameData::Video {
+                        timestamp,
+                        mut data,
+                    } => {
+                        self.on_rtsp_video(&mut data, timestamp).await?;
+                    }
                     _ => continue,
                 };
                 retry_count = 0;
@@ -129,7 +139,39 @@ impl Rtsp2RtmpRemuxerSession {
             }
         }
 
-        self.unsubscribe_rtsp().await
+        self.unsubscribe_rtsp().await?;
+        self.unpublish_rtmp().await
+    }
+
+    async fn on_rtsp_audio(
+        &mut self,
+        audio_data: &mut BytesMut,
+        timestamp: u32,
+    ) -> Result<(), RtmpRemuxerError> {
+        let mut audio_tag_header = AudioTagHeader {
+            sound_format: 10,
+            sound_rate: 3,
+            sound_size: 1,
+            sound_type: 1,
+            aac_packet_type: 0,
+        };
+
+        if audio_data.len() > 5 {
+            audio_tag_header.aac_packet_type = 1;
+        }
+
+        let tag_header_data = audio_tag_header.marshal()?;
+
+        let mut writer = BytesWriter::new();
+        writer.write(&tag_header_data)?;
+        writer.write(&audio_data)?;
+
+        //utils::print::print2("on_rtsp_audio", writer.get_current_bytes());
+        self.rtmp_handler
+            .on_audio_data(&mut writer.extract_current_bytes(), &timestamp)
+            .await?;
+
+        Ok(())
     }
 
     async fn on_rtsp_video(
@@ -165,20 +207,25 @@ impl Rtsp2RtmpRemuxerSession {
         let mut sps = None;
         let mut pps = None;
 
-        for nalu in nalu_vec {
+        for nalu in &nalu_vec {
             let mut nalu_reader = BytesReader::new(nalu.clone());
 
             let nalu_type = nalu_reader.read_u8()?;
-            match nalu_type {
+            match nalu_type & 0x1F {
                 H264_NAL_SPS => {
+                    utils::print::print(nalu_reader.get_remaining_bytes());
+
                     let mut sps_parser = SpsParser::new(nalu_reader);
                     (width, height) = if let Ok((width, height)) = sps_parser.parse() {
                         (width, height)
                     } else {
                         (0, 0)
                     };
+
+                    log::info!("width:{}x{}", width, height);
                     level = sps_parser.sps.level_idc;
                     profile = sps_parser.sps.profile_idc;
+
                     sps = Some(nalu.clone());
                 }
                 H264_NAL_PPS => pps = Some(nalu.clone()),
@@ -188,11 +235,19 @@ impl Rtsp2RtmpRemuxerSession {
 
         if sps.is_some() && pps.is_some() {
             let mut meta_data = self.gen_rtmp_meta_data(width, height)?;
+            log::info!("rtmp remuxer: generate meta data");
             self.rtmp_handler.on_meta_data(&mut meta_data, &0).await?;
 
+            log::info!("rtmp remuxer: generate seq header ");
             let mut seq_header =
                 self.gen_rtmp_video_seq_header(sps.unwrap(), pps.unwrap(), profile, level)?;
+            utils::print::print(seq_header.clone());
             self.rtmp_handler.on_video_data(&mut seq_header, &0).await?;
+        } else {
+            let mut frame_data = self.gen_rtmp_video_frame_data(nalu_vec)?;
+            self.rtmp_handler
+                .on_video_data(&mut frame_data, &timestamp)
+                .await?;
         }
 
         Ok(())
@@ -234,9 +289,9 @@ impl Rtsp2RtmpRemuxerSession {
                 level,
                 nalu_length: 4,
                 nb_pps: 1,
-                sps: vec![Sps { data: sps, size: 0 }],
+                sps: vec![Sps { data: sps }],
                 nb_sps: 1,
-                pps: vec![Pps { data: pps, size: 0 }],
+                pps: vec![Pps { data: pps }],
                 ..Default::default()
             },
         };
@@ -249,7 +304,10 @@ impl Rtsp2RtmpRemuxerSession {
         Ok(writer.extract_current_bytes())
     }
 
-    fn gen_rtmp_video_slice(&self, timesta) -> Result<BytesMut, RtmpRemuxerError> {
+    fn gen_rtmp_video_frame_data(
+        &self,
+        nalus: Vec<BytesMut>,
+    ) -> Result<BytesMut, RtmpRemuxerError> {
         let video_tag_header = VideoTagHeader {
             frame_type: 1,
             codec_id: 7,
@@ -257,6 +315,20 @@ impl Rtsp2RtmpRemuxerSession {
             composition_time: 0,
         };
         let tag_header_data = video_tag_header.marshal()?;
+
+        let mut processor = Mpeg4AvcProcessor {
+            mpeg4_avc: Mpeg4Avc {
+                nalu_length: 4,
+                ..Default::default()
+            },
+        };
+        let mpegavc_data = processor.nalus_to_mpeg4avc(nalus)?;
+
+        let mut writer = BytesWriter::new();
+        writer.write(&tag_header_data)?;
+        writer.write(&mpegavc_data)?;
+
+        Ok(writer.extract_current_bytes())
     }
 
     pub async fn subscribe_rtsp(&mut self) -> Result<(), RtmpRemuxerError> {
@@ -264,7 +336,7 @@ impl Rtsp2RtmpRemuxerSession {
 
         let sub_info = SubscriberInfo {
             id: self.subscribe_id,
-            sub_type: SubscribeType::PlayerRtsp,
+            sub_type: SubscribeType::PlayerRtmp,
             notify_info: NotifyInfo {
                 request_url: String::from(""),
                 remote_addr: String::from(""),

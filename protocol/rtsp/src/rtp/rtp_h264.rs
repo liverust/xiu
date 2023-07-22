@@ -156,6 +156,7 @@ impl TVideoPacker for RtpH264Packer {
 pub struct RtpH264UnPacker {
     sequence_number: u16,
     timestamp: u32,
+    clock_rate: u32,
     fu_buffer: BytesMut,
     flags: i16,
     on_frame_handler: Option<OnFrameFn>,
@@ -170,7 +171,7 @@ impl TUnPacker for RtpH264UnPacker {
             f(rtp_packet.clone());
         }
 
-        self.timestamp = rtp_packet.header.timestamp;
+        self.timestamp = rtp_packet.header.timestamp / (self.clock_rate / 1000);
         self.sequence_number = rtp_packet.header.seq_number;
 
         if let Some(packet_type) = rtp_packet.payload.get(0) {
@@ -205,8 +206,11 @@ impl TUnPacker for RtpH264UnPacker {
 }
 
 impl RtpH264UnPacker {
-    pub fn new() -> Self {
-        RtpH264UnPacker::default()
+    pub fn new(clock_rate: u32) -> Self {
+        RtpH264UnPacker {
+            clock_rate,
+            ..Default::default()
+        }
     }
 
     fn unpack_single(
