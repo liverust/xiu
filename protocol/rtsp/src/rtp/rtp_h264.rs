@@ -26,6 +26,7 @@ use tokio::sync::Mutex;
 pub struct RtpH264Packer {
     header: RtpHeader,
     mtu: usize,
+    clock_rate: u32,
     on_packet_handler: Option<OnRtpPacketFn>,
     on_packet_for_rtcp_handler: Option<OnRtpPacketFn2>,
     io: Arc<Mutex<Box<dyn TNetIO + Send + Sync>>>,
@@ -37,6 +38,7 @@ impl RtpH264Packer {
         ssrc: u32,
         init_seq: u16,
         mtu: usize,
+        clock_rate: u32,
         io: Arc<Mutex<Box<dyn TNetIO + Send + Sync>>>,
     ) -> Self {
         RtpH264Packer {
@@ -49,6 +51,7 @@ impl RtpH264Packer {
             },
             mtu,
             io,
+            clock_rate,
             on_packet_handler: None,
             on_packet_for_rtcp_handler: None,
         }
@@ -124,7 +127,7 @@ impl RtpH264Packer {
 impl TPacker for RtpH264Packer {
     //pack annexb h264 data
     async fn pack(&mut self, nalus: &mut BytesMut, timestamp: u32) -> Result<(), PackerError> {
-        self.header.timestamp = timestamp;
+        self.header.timestamp = timestamp; // ((timestamp as u64 * self.clock_rate as u64) / 1000) as u32;
         utils::split_annexb_and_process(nalus, self).await?;
         Ok(())
     }
@@ -171,7 +174,8 @@ impl TUnPacker for RtpH264UnPacker {
             f(rtp_packet.clone());
         }
 
-        self.timestamp = rtp_packet.header.timestamp / (self.clock_rate / 1000);
+        self.timestamp = rtp_packet.header.timestamp;
+        //// (self.clock_rate / 1000);
         self.sequence_number = rtp_packet.header.seq_number;
 
         if let Some(packet_type) = rtp_packet.payload.get(0) {

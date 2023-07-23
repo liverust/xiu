@@ -137,6 +137,7 @@ impl TRtpFunc for RtpChannel {
                     self.ssrc,
                     self.init_sequence,
                     1400,
+                    self.codec_info.sample_rate,
                     io,
                 )));
             }

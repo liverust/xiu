@@ -93,33 +93,21 @@ impl HttpFlv {
     }
 
     pub fn write_flv_tag(&mut self, channel_data: FrameData) -> Result<(), HttpFLvError> {
-        let common_data: BytesMut;
-        let common_timestamp: u32;
-        let tag_type: u8;
-
-        match channel_data {
-            FrameData::Audio { timestamp, data } => {
-                common_data = data;
-                common_timestamp = timestamp;
-                tag_type = tag_type::AUDIO;
-            }
-
-            FrameData::Video { timestamp, data } => {
-                common_data = data;
-                common_timestamp = timestamp;
-                tag_type = tag_type::VIDEO;
-            }
-
+        let (common_data, common_timestamp, tag_type) = match channel_data {
+            FrameData::Audio { timestamp, data } => (data, timestamp, tag_type::AUDIO),
+            FrameData::Video { timestamp, data } => (data, timestamp, tag_type::VIDEO),
             FrameData::MetaData { timestamp, data } => {
                 let mut metadata = MetaData::new();
                 metadata.save(&data);
                 let data = metadata.remove_set_data_frame()?;
 
-                common_data = data;
-                common_timestamp = timestamp;
-                tag_type = tag_type::SCRIPT_DATA_AMF;
+                (data, timestamp, tag_type::SCRIPT_DATA_AMF)
             }
-        }
+            _ => {
+                log::error!("should not be here!!!");
+                (BytesMut::new(), 0, 0)
+            }
+        };
 
         let common_data_len = common_data.len() as u32;
 

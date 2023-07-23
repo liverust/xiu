@@ -87,6 +87,7 @@ impl Common {
                     FrameData::MetaData { timestamp, data } => {
                         self.send_metadata(data, timestamp).await?;
                     }
+                    _ => {}
                 }
             } else {
                 retry_times += 1;

@@ -101,10 +101,17 @@ pub enum VideoCodecType {
 }
 
 #[derive(Clone)]
+pub struct MediaInfo {
+    pub audio_clock_rate: u32,
+    pub video_clock_rate: u32,
+}
+
+#[derive(Clone)]
 pub enum FrameData {
     Video { timestamp: u32, data: BytesMut },
     Audio { timestamp: u32, data: BytesMut },
     MetaData { timestamp: u32, data: BytesMut },
+    MediaInfo { media_info: MediaInfo },
 }
 
 //used to save data which needs to be transferred between client/server sessions

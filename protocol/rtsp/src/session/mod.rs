@@ -28,6 +28,7 @@ use bytesio::bytesio::UdpIO;
 use errors::SessionError;
 use errors::SessionErrorValue;
 use http::StatusCode;
+use streamhub::define::MediaInfo;
 use streamhub::define::VideoCodecType;
 
 use super::http::RtspRequest;
@@ -507,6 +508,7 @@ impl RtspServerSession {
                         }
                     }
                     FrameData::MetaData { timestamp, data } => {}
+                    _ => {}
                 }
             } else {
                 retry_times += 1;
@@ -735,6 +737,8 @@ impl TStreamHandler for RtspStreamHandler {
             SubscribeType::PlayerRtmp => {
                 log::info!("send rtsp cache data");
                 let sdp_info = self.sdp.lock().await;
+                let mut video_clock_rate: u32 = 0;
+                let mut audio_clock_rate: u32 = 0;
                 for media in &sdp_info.medias {
                     let mut bytes_writer = BytesWriter::new();
                     if let Some(fmtp) = &media.fmtp {
@@ -752,6 +756,7 @@ impl TStreamHandler for RtspStreamHandler {
                                 if let Err(err) = sender.send(frame_data) {
                                     log::error!("send sps/pps error: {}", err);
                                 }
+                                video_clock_rate = media.rtpmap.clock_rate;
                             }
                             Fmtp::H265(data) => {
                                 bytes_writer.write(&ANNEXB_NALU_START_CODE)?;
@@ -780,9 +785,20 @@ impl TStreamHandler for RtspStreamHandler {
                                 if let Err(err) = sender.send(frame_data) {
                                     log::error!("send asc error: {}", err);
                                 }
+
+                                audio_clock_rate = media.rtpmap.clock_rate;
                             }
                         }
                     }
+                }
+
+                if let Err(err) = sender.send(FrameData::MediaInfo {
+                    media_info: MediaInfo {
+                        audio_clock_rate,
+                        video_clock_rate,
+                    },
+                }) {
+                    log::error!("send media info error: {}", err);
                 }
             }
             _ => {}

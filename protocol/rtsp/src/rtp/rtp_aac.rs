@@ -146,18 +146,19 @@ impl TUnPacker for RtpAacUnPacker {
             au_lengths.push(au_length / 8);
         }
 
-        // log::info!(
-        //     "send audio : au_headers_length :{}, aus_number: {}, au_lengths: {:?}",
-        //     au_headers_length,
-        //     aus_number,
-        //     au_lengths,
-        // );
+        log::info!(
+            "send audio : au_headers_length :{}, aus_number: {}, au_lengths: {:?}",
+            au_headers_length,
+            aus_number,
+            au_lengths,
+        );
 
-        for au_length in au_lengths {
-            let au_data = reader_payload.read_bytes(au_length)?;
+        for i in 0..au_lengths.len() {
+            let au_data = reader_payload.read_bytes(au_lengths[i])?;
             if let Some(f) = &self.on_frame_handler {
                 f(FrameData::Audio {
-                    timestamp: rtp_packet.header.timestamp / (self.clock_rate / 1000),
+                    timestamp: rtp_packet.header.timestamp + i as u32 * 1024,
+                    /// (self.clock_rate / 1000),
                     data: au_data,
                 })?;
             }

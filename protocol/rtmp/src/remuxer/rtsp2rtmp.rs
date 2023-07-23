@@ -4,7 +4,7 @@ use bytesio::{bytes_reader::BytesReader, bytes_writer::BytesWriter};
 use h264_decoder::sps::SpsParser;
 use indexmap::IndexMap;
 use xflv::{
-    define::h264_nal_type::{H264_NAL_PPS, H264_NAL_SPS},
+    define::h264_nal_type::{H264_NAL_IDR, H264_NAL_PPS, H264_NAL_SPS},
     flv_tag_header::{AudioTagHeader, VideoTagHeader},
     mpeg4_aac::Mpeg4AacProcessor,
     mpeg4_avc::{Mpeg4Avc, Mpeg4AvcProcessor, Pps, Sps},
@@ -42,6 +42,8 @@ pub struct Rtsp2RtmpRemuxerSession {
     data_receiver: FrameDataReceiver,
     stream_path: String,
     subscribe_id: Uuid,
+    video_clock_rate: u32,
+    audio_clock_rate: u32,
 }
 
 pub fn find_start_code(nalus: &[u8]) -> Option<usize> {
@@ -73,6 +75,8 @@ impl Rtsp2RtmpRemuxerSession {
             rtmp_handler: Common::new(None, event_producer, SessionType::Server, None),
             subscribe_id: Uuid::new(RandomDigitCount::Four),
             publishe_id: Uuid::new(RandomDigitCount::Four),
+            video_clock_rate: 1000,
+            audio_clock_rate: 1000,
         }
     }
 
@@ -123,6 +127,15 @@ impl Rtsp2RtmpRemuxerSession {
                     } => {
                         self.on_rtsp_video(&mut data, timestamp).await?;
                     }
+                    FrameData::MediaInfo { media_info } => {
+                        self.video_clock_rate = media_info.video_clock_rate;
+                        self.audio_clock_rate = media_info.audio_clock_rate;
+                        log::info!(
+                            "audio clock rate: {} video clock rate: {}",
+                            self.audio_clock_rate,
+                            self.video_clock_rate
+                        );
+                    }
                     _ => continue,
                 };
                 retry_count = 0;
@@ -166,9 +179,13 @@ impl Rtsp2RtmpRemuxerSession {
         writer.write(&tag_header_data)?;
         writer.write(&audio_data)?;
 
+        let timestamp2 = timestamp / (self.audio_clock_rate / 1000);
+
+        log::info!(" timestamp: {}, timestam2: {}", timestamp, timestamp2);
+
         //utils::print::print2("on_rtsp_audio", writer.get_current_bytes());
         self.rtmp_handler
-            .on_audio_data(&mut writer.extract_current_bytes(), &timestamp)
+            .on_audio_data(&mut writer.extract_current_bytes(), &timestamp2)
             .await?;
 
         Ok(())
@@ -206,6 +223,7 @@ impl Rtsp2RtmpRemuxerSession {
         let mut profile: u8 = 0;
         let mut sps = None;
         let mut pps = None;
+        let mut contains_idr = false;
 
         for nalu in &nalu_vec {
             let mut nalu_reader = BytesReader::new(nalu.clone());
@@ -229,6 +247,9 @@ impl Rtsp2RtmpRemuxerSession {
                     sps = Some(nalu.clone());
                 }
                 H264_NAL_PPS => pps = Some(nalu.clone()),
+                H264_NAL_IDR => {
+                    contains_idr = true;
+                }
                 _ => {}
             }
         }
@@ -244,9 +265,13 @@ impl Rtsp2RtmpRemuxerSession {
             utils::print::print(seq_header.clone());
             self.rtmp_handler.on_video_data(&mut seq_header, &0).await?;
         } else {
-            let mut frame_data = self.gen_rtmp_video_frame_data(nalu_vec)?;
+            let mut frame_data = self.gen_rtmp_video_frame_data(nalu_vec, contains_idr)?;
+
+            let timestamp2 = timestamp / (self.video_clock_rate / 1000);
+
+            // log::info!(" timestamp: {}, timestam2: {}", timestamp, timestamp2);
             self.rtmp_handler
-                .on_video_data(&mut frame_data, &timestamp)
+                .on_video_data(&mut frame_data, &timestamp2)
                 .await?;
         }
 
@@ -307,9 +332,11 @@ impl Rtsp2RtmpRemuxerSession {
     fn gen_rtmp_video_frame_data(
         &self,
         nalus: Vec<BytesMut>,
+        contains_idr: bool,
     ) -> Result<BytesMut, RtmpRemuxerError> {
+        let frame_type = if contains_idr { 1 } else { 2 };
         let video_tag_header = VideoTagHeader {
-            frame_type: 1,
+            frame_type,
             codec_id: 7,
             avc_packet_type: 1,
             composition_time: 0,
