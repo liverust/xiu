@@ -158,8 +158,6 @@ mod tests {
     use crate::global_trait::Marshal;
     use crate::global_trait::Unmarshal;
 
-    use super::CastType;
-    use super::ProtocolType;
     use super::RtspTransport;
 
     #[test]

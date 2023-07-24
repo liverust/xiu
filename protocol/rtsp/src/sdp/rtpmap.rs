@@ -67,7 +67,7 @@ mod tests {
 
     #[test]
     fn test_marshal_unmarshal_rtpmap() {
-        let mut parser = RtpMap::unmarshal("97 MPEG4-GENERIC/44100/2").unwrap();
+        let parser = RtpMap::unmarshal("97 MPEG4-GENERIC/44100/2").unwrap();
 
         println!(" parser: {:?}", parser);
 
@@ -78,7 +78,7 @@ mod tests {
 
         print!("marshal str:{}", parser.marshal());
 
-        let mut parser2 = RtpMap::unmarshal("96 H264/90000").unwrap();
+        let parser2 = RtpMap::unmarshal("96 H264/90000").unwrap();
 
         println!(" parser2: {:?}", parser2);
 

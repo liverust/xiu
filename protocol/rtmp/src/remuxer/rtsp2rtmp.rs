@@ -44,6 +44,8 @@ pub struct Rtsp2RtmpRemuxerSession {
     subscribe_id: Uuid,
     video_clock_rate: u32,
     audio_clock_rate: u32,
+    base_video_timestamp: u32,
+    base_audio_timestamp: u32,
 }
 
 pub fn find_start_code(nalus: &[u8]) -> Option<usize> {
@@ -77,6 +79,8 @@ impl Rtsp2RtmpRemuxerSession {
             publishe_id: Uuid::new(RandomDigitCount::Four),
             video_clock_rate: 1000,
             audio_clock_rate: 1000,
+            base_audio_timestamp: 0,
+            base_video_timestamp: 0,
         }
     }
 
@@ -108,6 +112,59 @@ impl Rtsp2RtmpRemuxerSession {
                 self.publishe_id,
             )
             .await?;
+        Ok(())
+    }
+
+    pub async fn subscribe_rtsp(&mut self) -> Result<(), RtmpRemuxerError> {
+        let (sender, receiver) = mpsc::unbounded_channel();
+
+        let sub_info = SubscriberInfo {
+            id: self.subscribe_id,
+            sub_type: SubscribeType::PlayerRtmp,
+            notify_info: NotifyInfo {
+                request_url: String::from(""),
+                remote_addr: String::from(""),
+            },
+        };
+
+        let subscribe_event = StreamHubEvent::Subscribe {
+            identifier: StreamIdentifier::Rtsp {
+                stream_path: self.stream_path.clone(),
+            },
+            info: sub_info,
+            sender,
+        };
+
+        if self.event_producer.send(subscribe_event).is_err() {
+            return Err(RtmpRemuxerError {
+                value: RtmpRemuxerErrorValue::StreamHubEventSendErr,
+            });
+        }
+
+        self.data_receiver = receiver;
+        Ok(())
+    }
+
+    pub async fn unsubscribe_rtsp(&mut self) -> Result<(), RtmpRemuxerError> {
+        let sub_info = SubscriberInfo {
+            id: self.subscribe_id,
+            sub_type: SubscribeType::PlayerRtsp,
+            notify_info: NotifyInfo {
+                request_url: String::from(""),
+                remote_addr: String::from(""),
+            },
+        };
+
+        let subscribe_event = StreamHubEvent::UnSubscribe {
+            identifier: StreamIdentifier::Rtsp {
+                stream_path: self.stream_path.clone(),
+            },
+            info: sub_info,
+        };
+        if let Err(err) = self.event_producer.send(subscribe_event) {
+            log::error!("unsubscribe_from_channels err {}\n", err);
+        }
+
         Ok(())
     }
 
@@ -143,10 +200,7 @@ impl Rtsp2RtmpRemuxerSession {
                 sleep(Duration::from_millis(100)).await;
                 retry_count += 1;
             }
-            //When rtmp stream is interupted here we retry 10 times.
-            //maybe have a better way to judge the stream status.
-            //will do an optimization in the future.
-            //todo
+
             if retry_count > 10 {
                 break;
             }
@@ -161,6 +215,9 @@ impl Rtsp2RtmpRemuxerSession {
         audio_data: &mut BytesMut,
         timestamp: u32,
     ) -> Result<(), RtmpRemuxerError> {
+        if self.base_audio_timestamp == 0 {
+            self.base_audio_timestamp = timestamp;
+        }
         let mut audio_tag_header = AudioTagHeader {
             sound_format: 10,
             sound_rate: 3,
@@ -179,13 +236,10 @@ impl Rtsp2RtmpRemuxerSession {
         writer.write(&tag_header_data)?;
         writer.write(&audio_data)?;
 
-        let timestamp2 = timestamp / (self.audio_clock_rate / 1000);
-
-        log::info!(" timestamp: {}, timestam2: {}", timestamp, timestamp2);
-
-        //utils::print::print2("on_rtsp_audio", writer.get_current_bytes());
+        let timestamp_adjust =
+            (timestamp - self.base_audio_timestamp) / (self.audio_clock_rate / 1000);
         self.rtmp_handler
-            .on_audio_data(&mut writer.extract_current_bytes(), &timestamp2)
+            .on_audio_data(&mut writer.extract_current_bytes(), &timestamp_adjust)
             .await?;
 
         Ok(())
@@ -196,6 +250,9 @@ impl Rtsp2RtmpRemuxerSession {
         nalus: &mut BytesMut,
         timestamp: u32,
     ) -> Result<(), RtmpRemuxerError> {
+        if self.base_video_timestamp == 0 {
+            self.base_video_timestamp = timestamp;
+        }
         let mut nalu_vec = Vec::new();
         while nalus.len() > 0 {
             if let Some(first_pos) = find_start_code(&nalus[..]) {
@@ -231,8 +288,6 @@ impl Rtsp2RtmpRemuxerSession {
             let nalu_type = nalu_reader.read_u8()?;
             match nalu_type & 0x1F {
                 H264_NAL_SPS => {
-                    utils::print::print(nalu_reader.get_remaining_bytes());
-
                     let mut sps_parser = SpsParser::new(nalu_reader);
                     (width, height) = if let Ok((width, height)) = sps_parser.parse() {
                         (width, height)
@@ -256,22 +311,18 @@ impl Rtsp2RtmpRemuxerSession {
 
         if sps.is_some() && pps.is_some() {
             let mut meta_data = self.gen_rtmp_meta_data(width, height)?;
-            log::info!("rtmp remuxer: generate meta data");
             self.rtmp_handler.on_meta_data(&mut meta_data, &0).await?;
 
-            log::info!("rtmp remuxer: generate seq header ");
             let mut seq_header =
                 self.gen_rtmp_video_seq_header(sps.unwrap(), pps.unwrap(), profile, level)?;
-            utils::print::print(seq_header.clone());
             self.rtmp_handler.on_video_data(&mut seq_header, &0).await?;
         } else {
             let mut frame_data = self.gen_rtmp_video_frame_data(nalu_vec, contains_idr)?;
 
-            let timestamp2 = timestamp / (self.video_clock_rate / 1000);
-
-            // log::info!(" timestamp: {}, timestam2: {}", timestamp, timestamp2);
+            let timestamp_adjust =
+                (timestamp - self.base_video_timestamp) / (self.video_clock_rate / 1000);
             self.rtmp_handler
-                .on_video_data(&mut frame_data, &timestamp2)
+                .on_video_data(&mut frame_data, &timestamp_adjust)
                 .await?;
         }
 
@@ -356,58 +407,5 @@ impl Rtsp2RtmpRemuxerSession {
         writer.write(&mpegavc_data)?;
 
         Ok(writer.extract_current_bytes())
-    }
-
-    pub async fn subscribe_rtsp(&mut self) -> Result<(), RtmpRemuxerError> {
-        let (sender, receiver) = mpsc::unbounded_channel();
-
-        let sub_info = SubscriberInfo {
-            id: self.subscribe_id,
-            sub_type: SubscribeType::PlayerRtmp,
-            notify_info: NotifyInfo {
-                request_url: String::from(""),
-                remote_addr: String::from(""),
-            },
-        };
-
-        let subscribe_event = StreamHubEvent::Subscribe {
-            identifier: StreamIdentifier::Rtsp {
-                stream_path: self.stream_path.clone(),
-            },
-            info: sub_info,
-            sender,
-        };
-
-        if self.event_producer.send(subscribe_event).is_err() {
-            return Err(RtmpRemuxerError {
-                value: RtmpRemuxerErrorValue::StreamHubEventSendErr,
-            });
-        }
-
-        self.data_receiver = receiver;
-        Ok(())
-    }
-
-    pub async fn unsubscribe_rtsp(&mut self) -> Result<(), RtmpRemuxerError> {
-        let sub_info = SubscriberInfo {
-            id: self.subscribe_id,
-            sub_type: SubscribeType::PlayerRtsp,
-            notify_info: NotifyInfo {
-                request_url: String::from(""),
-                remote_addr: String::from(""),
-            },
-        };
-
-        let subscribe_event = StreamHubEvent::UnSubscribe {
-            identifier: StreamIdentifier::Rtsp {
-                stream_path: self.stream_path.clone(),
-            },
-            info: sub_info,
-        };
-        if let Err(err) = self.event_producer.send(subscribe_event) {
-            log::error!("unsubscribe_from_channels err {}\n", err);
-        }
-
-        Ok(())
     }
 }

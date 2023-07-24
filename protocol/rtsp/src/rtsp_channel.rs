@@ -49,10 +49,8 @@ pub struct RtpChannel {
 #[derive(Default)]
 pub struct RtcpChannel {
     recv_ctx: RtcpContext,
-    send_ctx: RtcpContext,
+    pub send_ctx: RtcpContext,
     channel_identifier: u8,
-    on_packet_handler: Option<OnRtpPacketFn>,
-    io: Option<Arc<Mutex<Box<dyn TNetIO + Send + Sync>>>>,
 }
 
 impl RtpChannel {
@@ -70,7 +68,7 @@ impl RtpChannel {
     }
 
     //Receive av frame from network -> pack AV frame to RTP packet -> send to stream hub
-    pub fn on_rtp_packet(&mut self, reader: &mut BytesReader) -> Result<(), UnPackerError> {
+    pub fn on_packet(&mut self, reader: &mut BytesReader) -> Result<(), UnPackerError> {
         if let Some(unpacker) = &mut self.rtp_unpacker {
             unpacker.unpack(reader)?;
         }
@@ -180,7 +178,9 @@ impl RtcpChannel {
                 RTCP_SR => {
                     if let Ok(sr) = RtcpSenderReport::unmarshal(reader) {
                         self.recv_ctx.received_sr(&sr);
-                        self.send_rr(rtcp_io).await;
+                        if let Err(err) = self.send_rr(rtcp_io).await {
+                            log::error!("send rr error: {}", err);
+                        }
                     }
                 }
                 _ => {}
@@ -188,7 +188,7 @@ impl RtcpChannel {
         }
     }
 
-    pub fn on_rtp_packet(&mut self, packet: RtpPacket) {
+    pub fn on_packet(&mut self, packet: RtpPacket) {
         self.recv_ctx.received_rtp(packet);
     }
 

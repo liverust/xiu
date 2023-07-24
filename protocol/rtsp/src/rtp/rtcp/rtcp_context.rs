@@ -1,7 +1,6 @@
 use crate::rtp::utils;
 use crate::rtp::RtpPacket;
 use bytes::BytesMut;
-use std::time::SystemTime;
 
 use super::{
     rtcp_app::RtcpApp,

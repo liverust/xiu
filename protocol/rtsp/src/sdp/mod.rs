@@ -321,8 +321,7 @@ mod tests {
     use crate::global_trait::{Marshal, Unmarshal};
 
     use super::Sdp;
-    use indexmap::IndexMap;
-    use std::io::{BufRead, BufReader, Read};
+
     #[test]
     fn test_parse_sdp() {
         let data2 = "ANNOUNCE rtsp://127.0.0.1:5544/stream RTSP/1.0\r\n\

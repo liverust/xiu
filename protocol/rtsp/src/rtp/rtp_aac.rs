@@ -1,7 +1,5 @@
 use super::errors::PackerError;
 use super::errors::UnPackerError;
-
-use super::utils::Marshal;
 use super::utils::OnFrameFn;
 use super::utils::OnRtpPacketFn;
 use super::utils::OnRtpPacketFn2;

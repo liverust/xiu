@@ -1,10 +1,7 @@
 use super::define;
-
 use super::errors::PackerError;
 use super::errors::UnPackerError;
-
 use super::utils;
-use super::utils::Marshal;
 use super::utils::OnFrameFn;
 use super::utils::OnRtpPacketFn;
 use super::utils::OnRtpPacketFn2;
@@ -22,7 +19,6 @@ use bytesio::bytes_reader::BytesReader;
 use bytesio::bytesio::TNetIO;
 use std::sync::Arc;
 use streamhub::define::FrameData;
-use streamhub::define::VideoCodecType;
 use tokio::sync::Mutex;
 
 pub struct RtpH265Packer {
@@ -173,7 +169,6 @@ pub struct RtpH265UnPacker {
     sequence_number: u16,
     timestamp: u32,
     fu_buffer: BytesMut,
-    flags: i16,
     using_donl_field: bool,
     on_frame_handler: Option<OnFrameFn>,
     on_packet_for_rtcp_handler: Option<OnRtpPacketFn2>,

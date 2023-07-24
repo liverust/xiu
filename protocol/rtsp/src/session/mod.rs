@@ -9,7 +9,7 @@ use crate::rtp::utils::Marshal as RtpMarshal;
 
 use crate::rtp::RtpPacket;
 use crate::rtsp_range::RtspRange;
-use crate::rtsp_utils;
+
 use crate::sdp::fmtp::Fmtp;
 
 use crate::rtsp_codec::RtspCodecInfo;
@@ -29,7 +29,6 @@ use errors::SessionError;
 use errors::SessionErrorValue;
 use http::StatusCode;
 use streamhub::define::MediaInfo;
-use streamhub::define::VideoCodecType;
 
 use super::http::RtspRequest;
 use super::rtp::errors::UnPackerError;
@@ -102,12 +101,12 @@ impl InterleavedBinaryData {
 
 impl RtspServerSession {
     pub fn new(stream: TcpStream, event_producer: StreamHubEventSender) -> Self {
-        let remote_addr = if let Ok(addr) = stream.peer_addr() {
-            log::info!("server session: {}", addr.to_string());
-            Some(addr)
-        } else {
-            None
-        };
+        // let remote_addr = if let Ok(addr) = stream.peer_addr() {
+        //     log::info!("server session: {}", addr.to_string());
+        //     Some(addr)
+        // } else {
+        //     None
+        // };
 
         let net_io: Box<dyn TNetIO + Send + Sync> = Box::new(TcpIO::new(stream));
         let io = Arc::new(Mutex::new(net_io));
@@ -156,13 +155,13 @@ impl RtspServerSession {
     ) -> Result<(), SessionError> {
         let mut cur_reader = BytesReader::new(self.reader.read_bytes(length as usize)?);
 
-        for (k, track) in &mut self.tracks {
+        for (_, track) in &mut self.tracks {
             if let Some(interleaveds) = track.transport.interleaved {
                 let rtp_identifier = interleaveds[0];
                 let rtcp_identifier = interleaveds[1];
 
                 if channel_identifier == rtp_identifier {
-                    track.on_rtp(&mut cur_reader).await;
+                    track.on_rtp(&mut cur_reader).await?;
                 } else if channel_identifier == rtcp_identifier {
                     track.on_rtcp(&mut cur_reader, self.io.clone()).await;
                 }
@@ -294,7 +293,7 @@ impl RtspServerSession {
             rtp_channel_guard.on_packet_for_rtcp_handler(Box::new(move |packet: RtpPacket| {
                 let rtcp_channel_in = Arc::clone(&rtcp_channel);
                 Box::pin(async move {
-                    rtcp_channel_in.lock().await.on_rtp_packet(packet);
+                    rtcp_channel_in.lock().await.on_packet(packet);
                 })
             }));
         }
@@ -613,12 +612,7 @@ impl RtspServerSession {
 
                     log::info!("audio codec info: {:?}", codec_info);
 
-                    let track = RtspTrack::new(
-                        TrackType::Audio,
-                        codec_info,
-                        media_control,
-                        self.io.clone(),
-                    );
+                    let track = RtspTrack::new(TrackType::Audio, codec_info, media_control);
                     self.tracks.insert(TrackType::Audio, track);
                 }
                 "video" => {
@@ -632,12 +626,7 @@ impl RtspServerSession {
                         sample_rate: media.rtpmap.clock_rate,
                         ..Default::default()
                     };
-                    let track = RtspTrack::new(
-                        TrackType::Video,
-                        codec_info,
-                        media_control,
-                        self.io.clone(),
-                    );
+                    let track = RtspTrack::new(TrackType::Video, codec_info, media_control);
                     self.tracks.insert(TrackType::Video, track);
                 }
                 _ => {}
@@ -735,7 +724,6 @@ impl TStreamHandler for RtspStreamHandler {
     ) -> Result<(), ChannelError> {
         match sub_type {
             SubscribeType::PlayerRtmp => {
-                log::info!("send rtsp cache data");
                 let sdp_info = self.sdp.lock().await;
                 let mut video_clock_rate: u32 = 0;
                 let mut audio_clock_rate: u32 = 0;
@@ -779,8 +767,6 @@ impl TStreamHandler for RtspStreamHandler {
                                     timestamp: 0,
                                     data: data.asc.clone(),
                                 };
-
-                                rtsp_utils::print("send asc", data.asc.clone());
 
                                 if let Err(err) = sender.send(frame_data) {
                                     log::error!("send asc error: {}", err);

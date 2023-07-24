@@ -2,7 +2,6 @@ use super::define;
 use super::errors::PackerError;
 use super::errors::UnPackerError;
 use super::utils;
-use super::utils::Marshal;
 use super::utils::OnFrameFn;
 use super::utils::OnRtpPacketFn;
 use super::utils::OnRtpPacketFn2;
@@ -20,13 +19,11 @@ use bytesio::bytes_reader::BytesReader;
 use bytesio::bytesio::TNetIO;
 use std::sync::Arc;
 use streamhub::define::FrameData;
-use streamhub::define::VideoCodecType;
 use tokio::sync::Mutex;
 
 pub struct RtpH264Packer {
     header: RtpHeader,
     mtu: usize,
-    clock_rate: u32,
     on_packet_handler: Option<OnRtpPacketFn>,
     on_packet_for_rtcp_handler: Option<OnRtpPacketFn2>,
     io: Arc<Mutex<Box<dyn TNetIO + Send + Sync>>>,
@@ -38,7 +35,6 @@ impl RtpH264Packer {
         ssrc: u32,
         init_seq: u16,
         mtu: usize,
-        clock_rate: u32,
         io: Arc<Mutex<Box<dyn TNetIO + Send + Sync>>>,
     ) -> Self {
         RtpH264Packer {
@@ -51,7 +47,6 @@ impl RtpH264Packer {
             },
             mtu,
             io,
-            clock_rate,
             on_packet_handler: None,
             on_packet_for_rtcp_handler: None,
         }
