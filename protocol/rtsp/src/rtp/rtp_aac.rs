@@ -144,7 +144,7 @@ impl TUnPacker for RtpAacUnPacker {
             au_lengths.push(au_length / 8);
         }
 
-        log::info!(
+        log::debug!(
             "send audio : au_headers_length :{}, aus_number: {}, au_lengths: {:?}",
             au_headers_length,
             aus_number,

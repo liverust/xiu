@@ -3,6 +3,7 @@ use bytes::BytesMut;
 use bytesio::{bytes_reader::BytesReader, bytes_writer::BytesWriter};
 use h264_decoder::sps::SpsParser;
 use indexmap::IndexMap;
+use streamhub::define::VideoCodecType;
 use xflv::{
     define::h264_nal_type::{H264_NAL_IDR, H264_NAL_PPS, H264_NAL_SPS},
     flv_tag_header::{AudioTagHeader, VideoTagHeader},
@@ -192,6 +193,13 @@ impl Rtsp2RtmpRemuxerSession {
                             self.audio_clock_rate,
                             self.video_clock_rate
                         );
+
+                        if media_info.vcodec == VideoCodecType::H265 {
+                            log::error!(
+                                "h265 rtsp to rtmp is not supported now!!! will come soon!!"
+                            );
+                            break;
+                        }
                     }
                     _ => continue,
                 };

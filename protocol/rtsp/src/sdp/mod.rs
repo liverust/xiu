@@ -62,7 +62,7 @@ pub struct SdpMediaInfo {
     port: usize,
     protocol: String,
     fmts: Vec<u8>,
-    bandwidth: Bandwidth,
+    bandwidth: Option<Bandwidth>,
     pub rtpmap: RtpMap,
     pub fmtp: Option<fmtp::Fmtp>,
     pub attributes: HashMap<String, String>,
@@ -152,13 +152,19 @@ impl Marshal for SdpMediaInfo {
             .collect::<Vec<String>>()
             .join(" ");
 
+        let bandwidth = if let Some(bandwidth) = &self.bandwidth {
+            format!("b={}", bandwidth.marshal())
+        } else {
+            String::from("")
+        };
+
         let mut sdp_media_info = format!(
-            "m={} {} {} {}\r\nb={}a=rtpmap:{}",
+            "m={} {} {} {}\r\n{}a=rtpmap:{}",
             self.media_type,
             self.port,
             self.protocol,
             fmts_str,
-            self.bandwidth.marshal(),
+            bandwidth,
             self.rtpmap.marshal()
         );
 
@@ -235,7 +241,7 @@ impl Unmarshal for Sdp {
                 }
                 "b" => {
                     if let Some(cur_media) = sdp.medias.last_mut() {
-                        cur_media.bandwidth = Bandwidth::unmarshal(kv[1]).unwrap();
+                        cur_media.bandwidth = Some(Bandwidth::unmarshal(kv[1]).unwrap());
                     } else {
                         continue;
                     }

@@ -29,6 +29,7 @@ use errors::SessionError;
 use errors::SessionErrorValue;
 use http::StatusCode;
 use streamhub::define::MediaInfo;
+use streamhub::define::VideoCodecType;
 
 use super::http::RtspRequest;
 use super::rtp::errors::UnPackerError;
@@ -385,8 +386,8 @@ impl RtspServerSession {
                     }
                     if let Some(rtcp_server_port) = rtcp_server_port {
                         server_ports[1] = rtcp_server_port;
+                        trans.server_port = Some(server_ports);
                     }
-                    trans.server_port = Some(server_ports);
 
                     let new_transport_data = trans.marshal();
                     response
@@ -727,6 +728,7 @@ impl TStreamHandler for RtspStreamHandler {
                 let sdp_info = self.sdp.lock().await;
                 let mut video_clock_rate: u32 = 0;
                 let mut audio_clock_rate: u32 = 0;
+                let mut vcodec: VideoCodecType = VideoCodecType::H264;
                 for media in &sdp_info.medias {
                     let mut bytes_writer = BytesWriter::new();
                     if let Some(fmtp) = &media.fmtp {
@@ -761,6 +763,7 @@ impl TStreamHandler for RtspStreamHandler {
                                 if let Err(err) = sender.send(frame_data) {
                                     log::error!("send sps/pps/vps error: {}", err);
                                 }
+                                vcodec = VideoCodecType::H265;
                             }
                             Fmtp::Mpeg4(data) => {
                                 let frame_data = FrameData::Audio {
@@ -782,6 +785,7 @@ impl TStreamHandler for RtspStreamHandler {
                     media_info: MediaInfo {
                         audio_clock_rate,
                         video_clock_rate,
+                        vcodec,
                     },
                 }) {
                     log::error!("send media info error: {}", err);
