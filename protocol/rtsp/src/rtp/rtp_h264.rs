@@ -170,15 +170,9 @@ impl TUnPacker for RtpH264UnPacker {
         }
 
         self.timestamp = rtp_packet.header.timestamp;
-        //// (self.clock_rate / 1000);
         self.sequence_number = rtp_packet.header.seq_number;
 
         if let Some(packet_type) = rtp_packet.payload.get(0) {
-            let t = *packet_type & 0x1F;
-            if t != 1 && t != 28 {
-                log::info!("type: {}", *packet_type & 0x1F);
-            }
-
             match *packet_type & 0x1F {
                 1..=23 => {
                     return self.unpack_single(rtp_packet.payload.clone(), *packet_type);
@@ -205,9 +199,8 @@ impl TUnPacker for RtpH264UnPacker {
 }
 
 impl RtpH264UnPacker {
-    pub fn new(clock_rate: u32) -> Self {
+    pub fn new() -> Self {
         RtpH264UnPacker {
-            clock_rate,
             ..Default::default()
         }
     }

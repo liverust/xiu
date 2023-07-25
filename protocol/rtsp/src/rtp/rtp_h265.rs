@@ -103,6 +103,10 @@ impl RtpH265Packer {
             packet.payload.put(fu_payload);
             packet.header.marker = if fu_header & define::FU_END > 0 { 1 } else { 0 };
 
+            if fu_header & define::FU_START > 0 {
+                fu_header &= 0x7F
+            }
+
             if let Some(f) = &self.on_packet_for_rtcp_handler {
                 f(packet.clone());
             }

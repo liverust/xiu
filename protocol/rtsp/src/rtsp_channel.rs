@@ -114,15 +114,13 @@ impl TRtpFunc for RtpChannel {
     fn create_unpacker(&mut self) {
         match self.codec_info.codec_id {
             RtspCodecId::H264 => {
-                self.rtp_unpacker =
-                    Some(Box::new(RtpH264UnPacker::new(self.codec_info.sample_rate)));
+                self.rtp_unpacker = Some(Box::new(RtpH264UnPacker::new()));
             }
             RtspCodecId::H265 => {
                 self.rtp_unpacker = Some(Box::new(RtpH265UnPacker::default()));
             }
             RtspCodecId::AAC => {
-                self.rtp_unpacker =
-                    Some(Box::new(RtpAacUnPacker::new(self.codec_info.sample_rate)));
+                self.rtp_unpacker = Some(Box::new(RtpAacUnPacker::new()));
             }
             RtspCodecId::G711A => {}
         }

@@ -15,7 +15,6 @@ use {
     },
     async_trait::async_trait,
     bytes::BytesMut,
-    bytesio::bytesio::TNetIO,
     std::fmt,
     std::{net::SocketAddr, sync::Arc},
     streamhub::{
@@ -541,7 +540,7 @@ impl TStreamHandler for RtmpStreamHandler {
         None
     }
 
-    async fn send_information(&self, sender: InformationSender) {}
+    async fn send_information(&self, _: InformationSender) {}
 }
 
 impl fmt::Debug for Common {

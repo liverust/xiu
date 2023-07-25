@@ -94,7 +94,6 @@ impl TRtpReceiverForRtcp for RtpAacPacker {
 pub struct RtpAacUnPacker {
     sequence_number: u16,
     timestamp: u32,
-    clock_rate: u32,
     fu_buffer: BytesMut,
     flags: i16,
     on_frame_handler: Option<OnFrameFn>,
@@ -115,9 +114,8 @@ pub struct RtpAacUnPacker {
 // Au-headers-length 2 bytes
 
 impl RtpAacUnPacker {
-    pub fn new(clock_rate: u32) -> Self {
+    pub fn new() -> Self {
         Self {
-            clock_rate,
             ..Default::default()
         }
     }
@@ -156,7 +154,6 @@ impl TUnPacker for RtpAacUnPacker {
             if let Some(f) = &self.on_frame_handler {
                 f(FrameData::Audio {
                     timestamp: rtp_packet.header.timestamp + i as u32 * 1024,
-                    /// (self.clock_rate / 1000),
                     data: au_data,
                 })?;
             }

@@ -728,7 +728,9 @@ impl TStreamHandler for RtspStreamHandler {
                 let sdp_info = self.sdp.lock().await;
                 let mut video_clock_rate: u32 = 0;
                 let mut audio_clock_rate: u32 = 0;
+
                 let mut vcodec: VideoCodecType = VideoCodecType::H264;
+
                 for media in &sdp_info.medias {
                     let mut bytes_writer = BytesWriter::new();
                     if let Some(fmtp) = &media.fmtp {
@@ -763,6 +765,7 @@ impl TStreamHandler for RtspStreamHandler {
                                 if let Err(err) = sender.send(frame_data) {
                                     log::error!("send sps/pps/vps error: {}", err);
                                 }
+
                                 vcodec = VideoCodecType::H265;
                             }
                             Fmtp::Mpeg4(data) => {
@@ -785,6 +788,7 @@ impl TStreamHandler for RtspStreamHandler {
                     media_info: MediaInfo {
                         audio_clock_rate,
                         video_clock_rate,
+
                         vcodec,
                     },
                 }) {
