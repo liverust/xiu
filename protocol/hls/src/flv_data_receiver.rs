@@ -110,8 +110,8 @@ impl FlvDataReceiver {
             };
 
             let identifier = StreamIdentifier::Rtmp {
-                app_name: app_name.clone(),
-                stream_name: stream_name.clone(),
+                app_name,
+                stream_name,
             };
 
             let subscribe_event = StreamHubEvent::Subscribe {

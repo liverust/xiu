@@ -341,7 +341,7 @@ mod tests {
         for _ in 0..4 {
             size = bytes_reader.read_u8().unwrap() as u32 + (size << 8);
         }
-        println!("size: {}", size);
+        println!("size: {size}");
     }
     #[test]
     fn test_bigend_to_bytes() {

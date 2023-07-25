@@ -240,7 +240,7 @@ impl Rtsp2RtmpRemuxerSession {
 
         let mut writer = BytesWriter::new();
         writer.write(&tag_header_data)?;
-        writer.write(&audio_data)?;
+        writer.write(audio_data)?;
 
         let timestamp_adjust =
             (timestamp - self.base_audio_timestamp) / (self.audio_clock_rate / 1000);
@@ -260,7 +260,7 @@ impl Rtsp2RtmpRemuxerSession {
             self.base_video_timestamp = timestamp;
         }
         let mut nalu_vec = Vec::new();
-        while nalus.len() > 0 {
+        while !nalus.is_empty() {
             if let Some(first_pos) = find_start_code(&nalus[..]) {
                 let mut nalu_with_start_code =
                     if let Some(distance_to_first_pos) = find_start_code(&nalus[first_pos + 3..]) {

@@ -296,7 +296,7 @@ impl Common {
         log::info!(
             "subscribe_from_channels, app_name: {} stream_name: {} subscribe_id: {}",
             app_name,
-            stream_name.clone(),
+            stream_name,
             sub_id
         );
 
@@ -304,8 +304,8 @@ impl Common {
             let (sender, receiver) = mpsc::unbounded_channel();
 
             let identifier = StreamIdentifier::Rtmp {
-                app_name: app_name.clone(),
-                stream_name: stream_name.clone(),
+                app_name,
+                stream_name,
             };
 
             let subscribe_event = StreamHubEvent::Subscribe {
