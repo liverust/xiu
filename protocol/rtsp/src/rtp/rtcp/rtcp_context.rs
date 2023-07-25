@@ -40,7 +40,6 @@ struct RtcpSource {
     received: u32,       /* packets received */
     expected_prior: u32, /* packet expected at last interval */
     received_prior: u32, /* packet received at last interval */
-    transit: u32,        /* relative trans time for prev pkt */
     jitter: f64,         /* estimated jitter */
 }
 
@@ -121,7 +120,6 @@ pub struct RtcpContext {
     sample_rate: u32,
     send_bytes: u64,
     send_packets: u64,
-    bindwidth: usize,
 
     source: RtcpSource,
 }

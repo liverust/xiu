@@ -1,5 +1,5 @@
 use {
-    super::{define::h264_nal_type, errors::MpegAvcError, Marshal, Unmarshal},
+    super::{define::h264_nal_type, errors::MpegAvcError},
     byteorder::BigEndian,
     bytes::BytesMut,
     bytesio::{bytes_reader::BytesReader, bytes_writer::BytesWriter},

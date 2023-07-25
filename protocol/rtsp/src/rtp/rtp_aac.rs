@@ -24,7 +24,6 @@ use tokio::sync::Mutex;
 
 pub struct RtpAacPacker {
     header: RtpHeader,
-    mtu: usize,
     on_packet_handler: Option<OnRtpPacketFn>,
     on_packet_for_rtcp_handler: Option<OnRtpPacketFn2>,
     io: Arc<Mutex<Box<dyn TNetIO + Send + Sync>>>,
@@ -35,7 +34,6 @@ impl RtpAacPacker {
         payload_type: u8,
         ssrc: u32,
         init_seq: u16,
-        mtu: usize,
         io: Arc<Mutex<Box<dyn TNetIO + Send + Sync>>>,
     ) -> Self {
         RtpAacPacker {
@@ -47,7 +45,6 @@ impl RtpAacPacker {
                 marker: 1,
                 ..Default::default()
             },
-            mtu,
             io,
             on_packet_handler: None,
             on_packet_for_rtcp_handler: None,
@@ -92,10 +89,6 @@ impl TRtpReceiverForRtcp for RtpAacPacker {
 
 #[derive(Default)]
 pub struct RtpAacUnPacker {
-    sequence_number: u16,
-    timestamp: u32,
-    fu_buffer: BytesMut,
-    flags: i16,
     on_frame_handler: Option<OnFrameFn>,
     on_packet_for_rtcp_handler: Option<OnRtpPacketFn2>,
 }

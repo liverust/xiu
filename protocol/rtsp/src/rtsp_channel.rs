@@ -150,7 +150,6 @@ impl TRtpFunc for RtpChannel {
                     self.codec_info.payload_type,
                     self.ssrc,
                     self.init_sequence,
-                    1400,
                     io,
                 )));
             }

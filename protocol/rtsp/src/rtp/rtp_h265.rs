@@ -191,9 +191,6 @@ impl TUnPacker for RtpH265UnPacker {
 
         if let Some(packet_type) = rtp_packet.payload.get(0) {
             match *packet_type >> 1 & 0x3F {
-                1..=39 => {
-                    return self.unpack_single(rtp_packet.payload.clone());
-                }
                 define::FU => {
                     return self.unpack_fu(rtp_packet.payload.clone());
                 }

@@ -507,7 +507,6 @@ impl RtspServerSession {
                                 .await?;
                         }
                     }
-                    FrameData::MetaData { timestamp, data } => {}
                     _ => {}
                 }
             } else {
@@ -524,7 +523,6 @@ impl RtspServerSession {
                 }
             }
         }
-        Ok(())
     }
 
     pub fn unsubscribe_from_stream_hub(&mut self, stream_path: String) -> Result<(), SessionError> {

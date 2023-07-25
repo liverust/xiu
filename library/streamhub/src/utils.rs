@@ -1,4 +1,3 @@
-use bytes::Bytes;
 use rand::Rng;
 use std::fmt;
 use std::time::SystemTime;
@@ -120,7 +119,7 @@ mod tests {
 
         println!("{}", s);
 
-        if let Some(u) = Uuid::from_str(&s){
+        if let Some(u) = Uuid::from_str(&s) {
             println!("{:?}", u.to_string());
         }
     }

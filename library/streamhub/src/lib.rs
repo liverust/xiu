@@ -112,7 +112,7 @@ impl Transmitter {
                                     }
                                 }
                             }
-                            FrameData::MediaInfo{media_info} =>{
+                            FrameData::MediaInfo{media_info: _} =>{
 
                             }
                         }

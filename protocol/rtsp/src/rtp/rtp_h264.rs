@@ -154,9 +154,7 @@ impl TVideoPacker for RtpH264Packer {
 pub struct RtpH264UnPacker {
     sequence_number: u16,
     timestamp: u32,
-    clock_rate: u32,
     fu_buffer: BytesMut,
-    flags: i16,
     on_frame_handler: Option<OnFrameFn>,
     on_packet_for_rtcp_handler: Option<OnRtpPacketFn2>,
 }
@@ -208,7 +206,7 @@ impl RtpH264UnPacker {
     fn unpack_single(
         &mut self,
         payload: BytesMut,
-        t: define::RtpNalType,
+        _t: define::RtpNalType,
     ) -> Result<(), UnPackerError> {
         if let Some(f) = &self.on_frame_handler {
             let mut annexb_payload = BytesMut::new();

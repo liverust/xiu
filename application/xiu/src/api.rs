@@ -5,7 +5,6 @@ use {
         Json, Router,
     },
     serde::Deserialize,
-    std::str::FromStr,
     std::sync::Arc,
     streamhub::{define, define::StreamHubEventSender, utils::Uuid},
     {
