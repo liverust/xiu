@@ -1,6 +1,7 @@
 use crate::rtp::errors::PackerError;
 use crate::rtp::errors::UnPackerError;
 use crate::rtp::rtcp::rtcp_header::RtcpHeader;
+use crate::rtp::rtcp::RTCP_RR;
 use crate::rtp::rtcp::RTCP_SR;
 use crate::rtp::utils::OnFrameFn;
 use crate::rtp::utils::OnRtpPacketFn;
@@ -179,6 +180,7 @@ impl RtcpChannel {
                         }
                     }
                 }
+                RTCP_RR => {}
                 _ => {}
             }
         }

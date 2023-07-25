@@ -36,7 +36,7 @@ impl Unmarshal for RtspRange {
                         match chrono::NaiveDateTime::parse_from_str(range_time, "%Y%m%dT%H%M%SZ") {
                             Ok(dt) => dt,
                             Err(err) => {
-                                println!("get_clock_time error: {}", err);
+                                println!("get_clock_time error: {err}");
                                 return -1;
                             }
                         };

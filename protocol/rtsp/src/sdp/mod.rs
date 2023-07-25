@@ -102,7 +102,7 @@ impl Unmarshal for SdpMediaInfo {
         let mut sdp_media = SdpMediaInfo::default();
         let parameters: Vec<&str> = raw_data.split(' ').collect();
 
-        if let Some(para_0) = parameters.get(0) {
+        if let Some(para_0) = parameters.first() {
             sdp_media.media_type = para_0.to_string();
         }
 
@@ -173,7 +173,7 @@ impl Marshal for SdpMediaInfo {
         }
 
         for (k, v) in &self.attributes {
-            sdp_media_info = format!("{}a={}:{}\r\n", sdp_media_info, k, v);
+            sdp_media_info = format!("{sdp_media_info}a={k}:{v}\r\n");
         }
 
         sdp_media_info
@@ -310,7 +310,7 @@ impl Marshal for Sdp {
         );
 
         for (k, v) in &self.attributes {
-            sdp_str = format!("{}a={}:{}\r\n", sdp_str, k, v);
+            sdp_str = format!("{sdp_str}a={k}:{v}\r\n");
         }
 
         for media_info in &self.medias {
@@ -373,7 +373,7 @@ mod tests {
         // a=control:streamid=1：指定音频流的流ID。
 
         if let Some(sdp) = Sdp::unmarshal(data2) {
-            println!("sdp : {:?}", sdp);
+            println!("sdp : {sdp:?}");
 
             println!("sdp str : {}", sdp.marshal());
         }
@@ -389,6 +389,6 @@ mod tests {
             .collect::<Vec<String>>()
             .join(" ");
 
-        println!("=={}==", fmts_str);
+        println!("=={fmts_str}==");
     }
 }

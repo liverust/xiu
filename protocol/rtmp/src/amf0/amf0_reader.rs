@@ -262,7 +262,7 @@ mod tests {
 
         if value & (1 << 23) != 0 {
             // Sign extend the value
-            (value | sign_extend_mask)
+            value | sign_extend_mask
         } else {
             value
         }

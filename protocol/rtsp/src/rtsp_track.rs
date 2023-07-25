@@ -48,16 +48,14 @@ impl RtspTrack {
     pub fn new(track_type: TrackType, codec_info: RtspCodecInfo, media_control: String) -> Self {
         let rtp_channel = RtpChannel::new(codec_info);
 
-        let rtsp_track = RtspTrack {
+        RtspTrack {
             track_type,
             media_control,
             transport: RtspTransport::default(),
             uri: String::default(),
             rtp_channel: Arc::new(Mutex::new(rtp_channel)),
             rtcp_channel: Arc::new(Mutex::default()),
-        };
-
-        rtsp_track
+        }
     }
 
     pub async fn rtp_receive_loop(&mut self, mut rtp_io: Box<dyn TNetIO + Send + Sync>) {

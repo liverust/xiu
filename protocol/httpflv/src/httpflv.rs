@@ -156,59 +156,40 @@ impl HttpFlv {
     }
 
     pub async fn subscribe_from_rtmp_channels(&mut self) -> Result<(), HttpFLvError> {
-        loop {
-            let (sender, receiver) = mpsc::unbounded_channel();
+        let (sender, receiver) = mpsc::unbounded_channel();
 
-            let sub_info = SubscriberInfo {
-                id: self.subscriber_id,
-                sub_type: SubscribeType::PlayerHttpFlv,
-                notify_info: NotifyInfo {
-                    request_url: self.request_url.clone(),
-                    remote_addr: self.remote_addr.to_string(),
-                },
+        let sub_info = SubscriberInfo {
+            id: self.subscriber_id,
+            sub_type: SubscribeType::PlayerHttpFlv,
+            notify_info: NotifyInfo {
+                request_url: self.request_url.clone(),
+                remote_addr: self.remote_addr.to_string(),
+            },
+        };
+
+        let identifier = StreamIdentifier::Rtmp {
+            app_name: self.app_name.clone(),
+            stream_name: self.stream_name.clone(),
+        };
+
+        let subscribe_event = StreamHubEvent::Subscribe {
+            identifier,
+            info: sub_info,
+            sender,
+        };
+
+        let rv = self.event_producer.send(subscribe_event);
+
+        if rv.is_err() {
+            let session_error = SessionError {
+                value: SessionErrorValue::SendFrameDataErr,
             };
-
-            let identifier = StreamIdentifier::Rtmp {
-                app_name: self.app_name.clone(),
-                stream_name: self.stream_name.clone(),
-            };
-
-            let subscribe_event = StreamHubEvent::Subscribe {
-                identifier,
-                info: sub_info,
-                sender,
-            };
-
-            let rv = self.event_producer.send(subscribe_event);
-
-            if rv.is_err() {
-                let session_error = SessionError {
-                    value: SessionErrorValue::SendFrameDataErr,
-                };
-                return Err(HttpFLvError {
-                    value: HttpFLvErrorValue::SessionError(session_error),
-                });
-            }
-
-            self.data_consumer = receiver;
-            break;
-            // match receiver.await {
-            //     Ok(consumer) => {
-            //         self.data_consumer = consumer;
-            //         break;
-            //     }
-            //     Err(_) => {
-            //         if retry_count > 10 {
-            //             let session_error = SessionError {
-            //                 value: SessionErrorValue::SubscribeCountLimitReach,
-            //             };
-            //             return Err(HttpFLvError {
-            //                 value: HttpFLvErrorValue::SessionError(session_error),
-            //             });
-            //         }
-            //     }
-            // }
+            return Err(HttpFLvError {
+                value: HttpFLvErrorValue::SessionError(session_error),
+            });
         }
+
+        self.data_consumer = receiver;
 
         Ok(())
     }

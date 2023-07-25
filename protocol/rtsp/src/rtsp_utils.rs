@@ -32,7 +32,7 @@ mod tests {
         if let (Some(a), Some(b), Some(c), _) =
             scanf!(str_a, |c| c == ':' || c == '.', i64, i64, i64, i64)
         {
-            println!("a:{} b:{} c:{} ", a, b, c);
+            println!("a:{a} b:{b} c:{c} ");
         }
     }
 }

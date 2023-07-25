@@ -3,7 +3,7 @@ use streamhub::stream::StreamIdentifier;
 use {
     super::errors::ClientError,
     crate::session::client_session::{ClientSession, ClientType},
-    streamhub::define::{StreamHubEventSender, BroadcastEvent, BroadcastEventReceiver},
+    streamhub::define::{BroadcastEvent, BroadcastEventReceiver, StreamHubEventSender},
     tokio::net::TcpStream,
 };
 

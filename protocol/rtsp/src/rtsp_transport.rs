@@ -134,13 +134,13 @@ impl Marshal for RtspTransport {
         };
 
         let ssrc = if let Some(ssrc) = self.ssrc {
-            format!("ssrc={};", ssrc)
+            format!("ssrc={ssrc};")
         } else {
             String::from("")
         };
 
         let mode = if let Some(mode) = &self.transport_mod {
-            format!("mode={}", mode)
+            format!("mode={mode}")
         } else {
             String::from("")
         };

@@ -144,7 +144,7 @@ mod tests {
                 let mut nalu_with_start_code =
                     if let Some(distance_to_first_pos) = find_start_code(&nalus[first_pos + 3..]) {
                         let mut second_pos = first_pos + 3 + distance_to_first_pos;
-                        println!("left: {} right: {}", first_pos, distance_to_first_pos);
+                        println!("left: {first_pos} right: {distance_to_first_pos}");
                         while second_pos > 0 && nalus[second_pos - 1] == 0 {
                             second_pos -= 1;
                         }
