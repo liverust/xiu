@@ -49,7 +49,6 @@ impl Service {
         self.start_rtmp(&mut stream_hub).await?;
         self.start_rtsp(&mut stream_hub).await?;
         self.start_http_api_server(&mut stream_hub).await?;
-        self.start_rtmp_remuxer(&mut stream_hub).await?;
 
         tokio::spawn(async move {
             stream_hub.run().await;
@@ -151,6 +150,8 @@ impl Service {
                 }
             });
         }
+
+        self.start_rtmp_remuxer(stream_hub).await?;
 
         Ok(())
     }

@@ -73,6 +73,8 @@ async fn main() -> Result<()> {
                 .value_parser(log_levels)
                 .conflicts_with("config_file_path"),
         )
+        // config_file_path conficts with all the other args,
+        // if not using config_file_path, RTSP/RTMP must be specified one or both
         .group(
             ArgGroup::new("one_of_group")
                 .args(&["config_file_path", "rtmp"])
