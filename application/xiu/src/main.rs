@@ -1,3 +1,5 @@
+use clap::ArgGroup;
+
 use {
     //https://rustcc.cn/article?id=6dcbf032-0483-4980-8bfe-c64a7dfb33c7
     anyhow::Result,
@@ -70,12 +72,17 @@ async fn main() -> Result<()> {
                 .help("Specify the log level.")
                 .value_parser(log_levels)
                 .conflicts_with("config_file_path"),
+        )
+        .group(
+            ArgGroup::new("one_of_group")
+                .args(&["config_file_path", "rtmp"])
+                .required(true),
+        )
+        .group(
+            ArgGroup::new("one_of_group2")
+                .args(&["config_file_path", "rtsp"])
+                .required(true),
         );
-    // .group(
-    //     ArgGroup::new("vers")
-    //         .args(["config_file_path", "rtmp", "rtsp"])
-    //         .required(true).,
-    // );
 
     let args: Vec<String> = env::args().collect();
     if 1 == args.len() {
