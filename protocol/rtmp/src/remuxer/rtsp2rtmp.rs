@@ -193,7 +193,7 @@ impl Rtsp2RtmpRemuxerSession {
                         );
 
                         if media_info.vcodec == VideoCodecType::H265 {
-                            log::error!(
+                            log::warn!(
                                 "h265 rtsp to rtmp is not supported now!!! will come soon!!"
                             );
                             break;

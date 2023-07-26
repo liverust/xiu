@@ -142,8 +142,8 @@ impl TUnPacker for RtpAacUnPacker {
             au_lengths,
         );
 
-        for i in 0..au_lengths.len() {
-            let au_data = reader_payload.read_bytes(au_lengths[i])?;
+        for (i, item) in au_lengths.iter().enumerate() {
+            let au_data = reader_payload.read_bytes(*item)?;
             if let Some(f) = &self.on_frame_handler {
                 f(FrameData::Audio {
                     timestamp: rtp_packet.header.timestamp + i as u32 * 1024,

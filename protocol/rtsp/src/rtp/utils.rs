@@ -82,7 +82,7 @@ pub async fn split_annexb_and_process<T: TVideoPacker>(
     nalus: &mut BytesMut,
     packer: &mut T,
 ) -> Result<(), PackerError> {
-    while nalus.len() > 0 {
+    while !nalus.is_empty() {
         /* 0x02,...,0x00,0x00,0x01,0x02..,0x00,0x00,0x01  */
         /*  |         |              |      |             */
         /*  -----------              --------             */
@@ -100,7 +100,7 @@ pub async fn split_annexb_and_process<T: TVideoPacker>(
                 };
 
             let nalu = nalu_with_start_code.split_off(first_pos + 3);
-            return packer.pack_nalu(nalu).await;
+            packer.pack_nalu(nalu).await?;
         } else {
             break;
         }
@@ -135,7 +135,7 @@ mod tests {
             0x00, 0x00, 0x01, 0x02, 0x03,
         ]);
 
-        while nalus.len() > 0 {
+        while !nalus.is_empty() {
             /* 0x02,...,0x00,0x00,0x01,0x02..,0x00,0x00,0x01  */
             /*  |         |              |      |             */
             /*  -----------              --------             */

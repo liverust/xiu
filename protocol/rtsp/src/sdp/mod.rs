@@ -19,7 +19,7 @@ impl Unmarshal for Bandwidth {
         let mut sdp_bandwidth = Bandwidth::default();
 
         let parameters: Vec<&str> = raw_data.split(':').collect();
-        if let Some(t) = parameters.get(0) {
+        if let Some(t) = parameters.first() {
             sdp_bandwidth.b_type = t.to_string();
         }
 
@@ -85,7 +85,7 @@ pub struct SdpMediaInfo {
 
 #[derive(Default, Debug, Clone)]
 pub struct Sdp {
-    raw_string: String,
+    pub raw_string: String,
     version: u16,
     origin: String,
     session: String,
@@ -117,13 +117,10 @@ impl Unmarshal for SdpMediaInfo {
         }
 
         let mut cur_param_idx = 3;
-        loop {
-            if let Some(fmt_str) = parameters.get(cur_param_idx) {
-                if let Ok(fmt) = fmt_str.parse::<u8>() {
-                    sdp_media.fmts.push(fmt);
-                }
-            } else {
-                break;
+
+        while let Some(fmt_str) = parameters.get(cur_param_idx) {
+            if let Ok(fmt) = fmt_str.parse::<u8>() {
+                sdp_media.fmts.push(fmt);
             }
             cur_param_idx += 1;
         }
@@ -182,13 +179,14 @@ impl Marshal for SdpMediaInfo {
 
 impl Unmarshal for Sdp {
     fn unmarshal(raw_data: &str) -> Option<Self> {
-        let mut sdp = Sdp::default();
-        sdp.raw_string = raw_data.to_string();
+        let mut sdp = Sdp {
+            raw_string: raw_data.to_string(),
+            ..Default::default()
+        };
 
-        log::info!("sdp raw: {}", raw_data);
         let lines: Vec<&str> = raw_data.split(|c| c == '\r' || c == '\n').collect();
         for line in lines {
-            if line == "" {
+            if line.is_empty() {
                 continue;
             }
             let kv: Vec<&str> = line.trim().splitn(2, '=').collect();
@@ -380,8 +378,7 @@ mod tests {
     }
     #[test]
     fn test_str() {
-        let mut fmts: Vec<u8> = Vec::new();
-        fmts.push(5);
+        let fmts: Vec<u8> = vec![5];
         // fmts.push(6);
         let fmts_str = fmts
             .iter()

@@ -75,7 +75,7 @@ impl Unmarshal for RtspRange {
                     }
                 }
 
-                if ranges.len() == 2 && ranges[1] != "" {
+                if ranges.len() == 2 && !ranges[1].is_empty() {
                     rtsp_range.end = Some(get_npt_time(ranges[1]));
                 }
             }
@@ -107,7 +107,7 @@ mod tests {
         //a=range:npt=0-
         let parser = RtspRange::unmarshal("clock=20220520T064812Z-20230520T064816Z").unwrap();
 
-        println!(" parser: {:?}", parser);
+        println!(" parser: {parser:?}");
 
         let parser1 = RtspRange::unmarshal("npt=now-").unwrap();
 

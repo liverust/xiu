@@ -170,7 +170,7 @@ impl TUnPacker for RtpH264UnPacker {
         self.timestamp = rtp_packet.header.timestamp;
         self.sequence_number = rtp_packet.header.seq_number;
 
-        if let Some(packet_type) = rtp_packet.payload.get(0) {
+        if let Some(packet_type) = rtp_packet.payload.first() {
             match *packet_type & 0x1F {
                 1..=23 => {
                     return self.unpack_single(rtp_packet.payload.clone(), *packet_type);
@@ -218,7 +218,7 @@ impl RtpH264UnPacker {
                 data: annexb_payload,
             })?;
         }
-        return Ok(());
+        Ok(())
     }
 
     //  0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
@@ -355,7 +355,7 @@ impl RtpH264UnPacker {
             payload_reader.read_u16::<BigEndian>()?;
         }
 
-        while payload_reader.len() > 0 {
+        while !payload_reader.is_empty() {
             let length = payload_reader.read_u16::<BigEndian>()? as usize;
             let nalu = payload_reader.read_bytes(length)?;
 
@@ -436,7 +436,7 @@ impl RtpH264UnPacker {
         //read decoding_order_number_base
         payload_reader.read_u16::<BigEndian>()?;
 
-        while payload_reader.len() > 0 {
+        while !payload_reader.is_empty() {
             //read nalu size
             let nalu_size = payload_reader.read_u16::<BigEndian>()? as usize;
             // read dond

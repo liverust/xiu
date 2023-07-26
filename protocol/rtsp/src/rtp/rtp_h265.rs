@@ -189,7 +189,7 @@ impl TUnPacker for RtpH265UnPacker {
         self.timestamp = rtp_packet.header.timestamp;
         self.sequence_number = rtp_packet.header.seq_number;
 
-        if let Some(packet_type) = rtp_packet.payload.get(0) {
+        if let Some(packet_type) = rtp_packet.payload.first() {
             match *packet_type >> 1 & 0x3F {
                 define::FU => {
                     return self.unpack_fu(rtp_packet.payload.clone());
@@ -229,7 +229,7 @@ impl RtpH265UnPacker {
                 data: annexb_payload,
             })?;
         }
-        return Ok(());
+        Ok(())
     }
 
     /*
@@ -261,7 +261,7 @@ impl RtpH265UnPacker {
         /*read PayloadHdr*/
         payload_reader.read_bytes(2)?;
 
-        while payload_reader.len() > 0 {
+        while !payload_reader.is_empty() {
             if self.using_donl_field {
                 /*read DONL*/
                 payload_reader.read_bytes(2)?;

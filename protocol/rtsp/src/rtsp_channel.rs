@@ -118,7 +118,7 @@ impl TRtpFunc for RtpChannel {
                 self.rtp_unpacker = Some(Box::new(RtpH264UnPacker::new()));
             }
             RtspCodecId::H265 => {
-                self.rtp_unpacker = Some(Box::new(RtpH265UnPacker::default()));
+                self.rtp_unpacker = Some(Box::new(RtpH265UnPacker::new()));
             }
             RtspCodecId::AAC => {
                 self.rtp_unpacker = Some(Box::new(RtpAacUnPacker::new()));

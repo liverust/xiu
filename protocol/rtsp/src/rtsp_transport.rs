@@ -145,10 +145,7 @@ impl Marshal for RtspTransport {
             String::from("")
         };
 
-        format!(
-            "{};{};{}{}{}{}{}",
-            protocol_type, cast_type, client_port, server_port, interleaved, ssrc, mode
-        )
+        format!("{protocol_type};{cast_type};{client_port}{server_port}{interleaved}{ssrc}{mode}")
     }
 }
 
@@ -166,7 +163,7 @@ mod tests {
             "RTP/AVP;unicast;client_port=8000-8001;server_port=9000-9001;ssrc=1234;interleaved=0-1;mode=record",
         ).unwrap();
 
-        println!(" parser: {:?}", parser);
+        println!(" parser: {parser:?}");
 
         // assert_eq!(parser.cast_type, CastType::Unicast);
         // assert_eq!(parser.protocol_type, ProtocolType::UDP);

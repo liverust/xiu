@@ -1,7 +1,4 @@
-use crate::{
-    global_trait::{Marshal, Unmarshal},
-    rtsp_utils,
-};
+use crate::global_trait::{Marshal, Unmarshal};
 use base64::{engine::general_purpose, Engine as _};
 use bytes::{BufMut, BytesMut};
 
@@ -218,10 +215,8 @@ impl Unmarshal for Mpeg4Fmtp {
                     mpeg4_fmtp.mode = kv[1].to_string();
                 }
                 "config" => {
-                    log::info!("asc: {}", kv[1]);
                     let asc = hex::decode(kv[1]).unwrap();
                     mpeg4_fmtp.asc.put(&asc[..]);
-                    rtsp_utils::print("get asc", mpeg4_fmtp.asc.clone());
                 }
                 "profile-level-id" => {
                     mpeg4_fmtp.profile_level_id = kv[1].into();

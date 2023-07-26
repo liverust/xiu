@@ -54,7 +54,7 @@ impl Transmitter {
                         match val {
                             TransmitterEvent::Subscribe { sender, info } => {
                                 self.stream_handler
-                                    .send_cache_data(sender.clone(), info.sub_type)
+                                    .send_prior_data(sender.clone(), info.sub_type)
                                     .await?;
 
                                 self.subscriberid_to_producer.insert(info.id, sender);

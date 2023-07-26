@@ -715,7 +715,7 @@ impl RtspStreamHandler {
 
 #[async_trait]
 impl TStreamHandler for RtspStreamHandler {
-    async fn send_cache_data(
+    async fn send_prior_data(
         &self,
         sender: FrameDataSender,
         sub_type: SubscribeType,

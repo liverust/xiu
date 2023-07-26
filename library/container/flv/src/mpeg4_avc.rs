@@ -27,6 +27,10 @@ impl Sps {
     pub fn len(&self) -> usize {
         self.data.len()
     }
+
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
 }
 
 #[derive(Clone, Default)]
@@ -44,6 +48,9 @@ impl Pps {
     }
     pub fn len(&self) -> usize {
         self.data.len()
+    }
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
     }
 }
 
