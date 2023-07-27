@@ -25,20 +25,13 @@ serde_json = { version = "1", default-features = false, features = [
 ] }
 axum = "0.6.10"
 tokio-metrics = { version = "0.2.0", default-features = false }
-uuid = { version = "0.6.5", features = ["v4"] }
 
-# rtmp = "0.3.1"   
-# httpflv = "0.2.1"
-# hls = "0.2.1"      
-
-env_logger_extend = "0.1.1"
+env_logger_extend = { path = "../../library/logger/" }
+streamhub = { path = "../../library/streamhub/" }
 rtmp = { path = "../../protocol/rtmp/" }
 rtsp = { path = "../../protocol/rtsp/" }
 httpflv = { path = "../../protocol/httpflv/" }
 hls = { path = "../../protocol/hls/" }
-streamhub = { path = "../../library/streamhub/" }
-# env_logger_extend = { path = "../../library/logger/" }
-
 
 [features]
 default = ["std"]

@@ -30,15 +30,10 @@ serde_json = { version = "1", default-features = false, features = [
 ] }
 serde = { version = "1.0", features = ["derive", "rc"] }
 
-
-# bytesio = "0.2.0"
-# xflv = "0.2.1"
-# h264-decoder = "0.1.0"
-
-streamhub = { path = "../../library/streamhub/" }
 bytesio = { path = "../../library/bytesio/" }
-xflv = { path = "../../library/container/flv/" }
+streamhub = { path = "../../library/streamhub/" }
 h264-decoder = { path = "../../library/codec/h264/" }
+xflv = { path = "../../library/container/flv/" }
 
 [dependencies.tokio]
 version = "1.4.0"
