@@ -400,20 +400,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "env_logger_extend"
-version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "49a04972dcdb9059f64c2be2b4445188c3d3713dabc7bb65cf10c933251dbc5d"
-dependencies = [
- "anyhow",
- "chrono",
- "env_logger",
- "failure",
- "job_scheduler",
- "log",
-]
-
-[[package]]
 name = "errno"
 version = "0.2.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -647,11 +633,11 @@ dependencies = [
 
 [[package]]
 name = "h264-decoder"
-version = "0.2.0"
+version = "0.1.0"
 dependencies = [
  "byteorder",
  "bytes",
- "bytesio 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "bytesio 0.3.0",
  "failure",
  "log",
 ]
@@ -698,38 +684,19 @@ checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
 
 [[package]]
 name = "hls"
-version = "0.3.0"
+version = "0.2.1"
 dependencies = [
  "byteorder",
  "bytes",
  "failure",
  "hyper",
  "log",
- "rtmp 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "streamhub 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "rtmp 0.3.1",
+ "streamhub 0.1.0",
  "tokio",
  "tokio-util 0.6.10",
- "xflv 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "xmpegts 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
-]
-
-[[package]]
-name = "hls"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e19c6ce32c96b10744038da2478878f41fb25cb9d70eff431ed8110b1ebf515a"
-dependencies = [
- "byteorder",
- "bytes",
- "failure",
- "hyper",
- "log",
- "rtmp 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "streamhub 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "tokio",
- "tokio-util 0.6.10",
- "xflv 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "xmpegts 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "xflv 0.2.1",
+ "xmpegts",
 ]
 
 [[package]]
@@ -797,7 +764,7 @@ checksum = "c4a1e36c821dbe04574f602848a19f742f4fb3c98d40449f11bcad18d6b17421"
 
 [[package]]
 name = "httpflv"
-version = "0.3.0"
+version = "0.2.1"
 dependencies = [
  "byteorder",
  "bytes",
@@ -805,28 +772,10 @@ dependencies = [
  "futures",
  "hyper",
  "log",
- "rtmp 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "streamhub 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "rtmp 0.3.1",
+ "streamhub 0.1.0",
  "tokio",
- "xflv 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
-]
-
-[[package]]
-name = "httpflv"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "17a4f0d6be37d18a3092d69077c70024b4928354c07a3f85e6715c59a3cfd049"
-dependencies = [
- "byteorder",
- "bytes",
- "failure",
- "futures",
- "hyper",
- "log",
- "rtmp 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "streamhub 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "tokio",
- "xflv 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "xflv 0.2.1",
 ]
 
 [[package]]
@@ -1266,7 +1215,7 @@ dependencies = [
  "clap",
  "env_logger",
  "log",
- "rtmp 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "rtmp 0.4.0",
  "streamhub 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "tokio",
 ]
@@ -1437,15 +1386,15 @@ dependencies = [
 
 [[package]]
 name = "rtmp"
-version = "0.4.0"
+version = "0.3.1"
 dependencies = [
  "async-trait",
  "byteorder",
  "bytes",
- "bytesio 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "bytesio 0.3.0",
  "chrono",
  "failure",
- "h264-decoder 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "h264-decoder 0.1.0",
  "hmac",
  "indexmap",
  "log",
@@ -1454,9 +1403,9 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
- "streamhub 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "streamhub 0.1.0",
  "tokio",
- "xflv 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "xflv 0.2.1",
 ]
 
 [[package]]
@@ -1471,7 +1420,7 @@ dependencies = [
  "bytesio 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "chrono",
  "failure",
- "h264-decoder 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "h264-decoder 0.2.0",
  "hmac",
  "indexmap",
  "log",
@@ -1482,7 +1431,7 @@ dependencies = [
  "sha2",
  "streamhub 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "tokio",
- "xflv 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "xflv 0.3.0",
 ]
 
 [[package]]
@@ -1667,7 +1616,7 @@ dependencies = [
  "async-trait",
  "byteorder",
  "bytes",
- "bytesio 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "bytesio 0.3.0",
  "chrono",
  "failure",
  "indexmap",
@@ -1677,7 +1626,7 @@ dependencies = [
  "serde",
  "serde_json",
  "tokio",
- "xflv 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "xflv 0.2.1",
 ]
 
 [[package]]
@@ -1699,7 +1648,7 @@ dependencies = [
  "serde",
  "serde_json",
  "tokio",
- "xflv 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "xflv 0.3.0",
 ]
 
 [[package]]
@@ -2268,13 +2217,13 @@ dependencies = [
 
 [[package]]
 name = "xflv"
-version = "0.3.0"
+version = "0.2.1"
 dependencies = [
  "byteorder",
  "bytes",
- "bytesio 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "bytesio 0.3.0",
  "failure",
- "h264-decoder 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "h264-decoder 0.1.0",
  "log",
  "serde",
 ]
@@ -2289,54 +2238,42 @@ dependencies = [
  "bytes",
  "bytesio 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "failure",
- "h264-decoder 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "h264-decoder 0.2.0",
  "log",
  "serde",
 ]
 
 [[package]]
 name = "xiu"
-version = "0.7.0"
+version = "0.6.1"
 dependencies = [
  "anyhow",
  "axum",
  "clap",
- "env_logger_extend 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "env_logger_extend",
  "failure",
- "hls 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "httpflv 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "hls",
+ "httpflv",
  "libc",
  "log",
- "rtmp 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "rtmp 0.3.1",
  "serde",
  "serde_derive",
  "serde_json",
- "streamhub 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "streamhub 0.1.0",
  "tokio",
  "tokio-metrics",
  "toml",
- "xrtsp 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "xrtsp",
 ]
 
 [[package]]
 name = "xmpegts"
-version = "0.2.0"
+version = "0.1.1"
 dependencies = [
  "byteorder",
  "bytes",
- "bytesio 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "failure",
-]
-
-[[package]]
-name = "xmpegts"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "30e38d4e58e1c86f4819e594392ef881fe8ed5d5b9d35d72b430b68523260981"
-dependencies = [
- "byteorder",
- "bytes",
- "bytesio 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "bytesio 0.3.0",
  "failure",
 ]
 
@@ -2348,7 +2285,7 @@ dependencies = [
  "base64",
  "byteorder",
  "bytes",
- "bytesio 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "bytesio 0.3.0",
  "chrono",
  "failure",
  "hex",
@@ -2357,29 +2294,6 @@ dependencies = [
  "lazy_static",
  "log",
  "rand 0.8.5",
- "streamhub 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "tokio",
-]
-
-[[package]]
-name = "xrtsp"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0b9f3647d7d028291102b5d16e024caa450d8227f3b127eb78948398dc11f4d7"
-dependencies = [
- "async-trait",
- "base64",
- "byteorder",
- "bytes",
- "bytesio 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "chrono",
- "failure",
- "hex",
- "http",
- "indexmap",
- "lazy_static",
- "log",
- "rand 0.8.5",
- "streamhub 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "streamhub 0.1.0",
  "tokio",
 ]

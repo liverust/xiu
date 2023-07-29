@@ -12,6 +12,7 @@ port = 1935
 [hls]
 enabled = true
 port = 8080
+record_path = "./record"
 
 #######################################
 #   LOG configurations                #

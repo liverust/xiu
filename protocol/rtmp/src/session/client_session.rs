@@ -527,7 +527,7 @@ impl ClientSession {
                         (&self.sub_app_name, &self.sub_stream_name)
                     {
                         self.common
-                            .subscribe_from_channels(
+                            .subscribe_from_stream_hub(
                                 app_name.clone(),
                                 stream_name.clone(),
                                 self.session_id,
@@ -535,7 +535,7 @@ impl ClientSession {
                             .await?;
                     } else {
                         self.common
-                            .subscribe_from_channels(
+                            .subscribe_from_stream_hub(
                                 self.app_name.clone(),
                                 self.stream_name.clone(),
                                 self.session_id,
@@ -547,7 +547,7 @@ impl ClientSession {
                 "NetStream.Play.Start" => {
                     //pull from remote rtmp server and publish to local session
                     self.common
-                        .publish_to_channels(
+                        .publish_to_stream_hub(
                             self.app_name.clone(),
                             self.stream_name.clone(),
                             self.session_id,

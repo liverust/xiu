@@ -93,7 +93,7 @@ impl Rtsp2RtmpRemuxerSession {
 
     pub async fn publish_rtmp(&mut self) -> Result<(), RtmpRemuxerError> {
         self.rtmp_handler
-            .publish_to_channels(
+            .publish_to_stream_hub(
                 self.app_name.clone(),
                 self.stream_name.clone(),
                 self.publishe_id,
@@ -105,7 +105,7 @@ impl Rtsp2RtmpRemuxerSession {
 
     pub async fn unpublish_rtmp(&mut self) -> Result<(), RtmpRemuxerError> {
         self.rtmp_handler
-            .unpublish_to_channels(
+            .unpublish_to_stream_hub(
                 self.app_name.clone(),
                 self.stream_name.clone(),
                 self.publishe_id,

@@ -134,8 +134,8 @@ pub struct StreamsHub {
     hub_event_receiver: StreamHubEventReceiver,
     //event is produced from other rtmp sessions
     hub_event_sender: StreamHubEventSender,
-    //client_event_producer: client_event_producer
-    client_event_producer: BroadcastEventSender,
+    //broadcase_event_sender: broadcase_event_sender
+    broadcast_event_sender: BroadcastEventSender,
     //The rtmp static push/pull and the hls transfer is triggered actively,
     //add a control switches separately.
     rtmp_push_enabled: bool,
@@ -158,7 +158,7 @@ impl StreamsHub {
             streams_info: HashMap::new(),
             hub_event_receiver: event_consumer,
             hub_event_sender: event_producer,
-            client_event_producer: client_producer,
+            broadcast_event_sender: client_producer,
             rtmp_push_enabled: false,
             rtmp_pull_enabled: false,
             rtmp_remuxer_enabled: false,
@@ -190,8 +190,8 @@ impl StreamsHub {
         self.hub_event_sender.clone()
     }
 
-    pub fn get_client_event_consumer(&mut self) -> BroadcastEventReceiver {
-        self.client_event_producer.subscribe()
+    pub fn get_broadcast_event_receiver(&mut self) -> BroadcastEventReceiver {
+        self.broadcast_event_sender.subscribe()
     }
 
     pub async fn event_loop(&mut self) {
@@ -405,7 +405,7 @@ impl StreamsHub {
             };
 
             //send subscribe info to pull clients
-            self.client_event_producer
+            self.broadcast_event_sender
                 .send(client_event)
                 .map_err(|_| ChannelError {
                     value: ChannelErrorValue::SendError,
@@ -475,7 +475,7 @@ impl StreamsHub {
             let client_event = BroadcastEvent::Publish { identifier };
 
             //send publish info to push clients
-            self.client_event_producer
+            self.broadcast_event_sender
                 .send(client_event)
                 .map_err(|_| ChannelError {
                     value: ChannelErrorValue::SendError,

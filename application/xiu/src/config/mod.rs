@@ -56,6 +56,7 @@ impl Config {
             hls_config = Some(HlsConfig {
                 enabled: true,
                 port: hls_port,
+                record_path: None,
             });
         }
 
@@ -113,6 +114,7 @@ pub struct HttpFlvConfig {
 pub struct HlsConfig {
     pub enabled: bool,
     pub port: usize,
+    pub record_path: Option<String>,
 }
 
 pub enum LogLevel {
@@ -164,7 +166,9 @@ fn test_toml_parse() {
     //     Err(err) => print!("{}\n", err),
     // }
 
-    let str = fs::read_to_string("/Users/zexu/github/xiu_live_rust/application/xiu/src/config/config.toml");
+    let str = fs::read_to_string(
+        "/Users/zexu/github/xiu_live_rust/application/xiu/src/config/config.toml",
+    );
 
     match str {
         Ok(val) => {

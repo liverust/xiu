@@ -161,7 +161,7 @@ impl ServerSession {
                 }
                 Err(err) => {
                     self.common
-                        .unpublish_to_channels(
+                        .unpublish_to_stream_hub(
                             self.app_name.clone(),
                             self.stream_name.clone(),
                             self.session_id,
@@ -205,7 +205,7 @@ impl ServerSession {
             Ok(_) => {}
             Err(err) => {
                 self.common
-                    .unsubscribe_from_channels(
+                    .unsubscribe_from_stream_hub(
                         self.app_name.clone(),
                         self.stream_name.clone(),
                         self.session_id,
@@ -482,7 +482,7 @@ impl ServerSession {
         stream_id: &f64,
     ) -> Result<(), SessionError> {
         self.common
-            .unpublish_to_channels(
+            .unpublish_to_stream_hub(
                 self.app_name.clone(),
                 self.stream_name.clone(),
                 self.session_id,
@@ -636,7 +636,7 @@ impl ServerSession {
         /*Now it can update the request url*/
         self.common.request_url = self.get_request_url(raw_stream_name);
         self.common
-            .subscribe_from_channels(
+            .subscribe_from_stream_hub(
                 self.app_name.clone(),
                 self.stream_name.clone(),
                 self.session_id,
@@ -715,7 +715,7 @@ impl ServerSession {
         );
 
         self.common
-            .publish_to_channels(
+            .publish_to_stream_hub(
                 self.app_name.clone(),
                 self.stream_name.clone(),
                 self.session_id,

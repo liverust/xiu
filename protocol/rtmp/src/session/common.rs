@@ -287,7 +287,7 @@ impl Common {
     }
 
     /*Subscribe from local channels and then send data to retmote common player or local RTMP relay push client*/
-    pub async fn subscribe_from_channels(
+    pub async fn subscribe_from_stream_hub(
         &mut self,
         app_name: String,
         stream_name: String,
@@ -325,7 +325,7 @@ impl Common {
         Ok(())
     }
 
-    pub async fn unsubscribe_from_channels(
+    pub async fn unsubscribe_from_stream_hub(
         &mut self,
         app_name: String,
         stream_name: String,
@@ -348,7 +348,7 @@ impl Common {
     }
 
     /*Begin to receive stream data from remote RTMP push client or local RTMP relay pull client*/
-    pub async fn publish_to_channels(
+    pub async fn publish_to_stream_hub(
         &mut self,
         app_name: String,
         stream_name: String,
@@ -380,7 +380,7 @@ impl Common {
         Ok(())
     }
 
-    pub async fn unpublish_to_channels(
+    pub async fn unpublish_to_stream_hub(
         &mut self,
         app_name: String,
         stream_name: String,
