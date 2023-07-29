@@ -1,11 +1,7 @@
-use {
-    super::{define::h264_nal_type, errors::Mpeg4AvcHevcError},
-    byteorder::BigEndian,
-    bytes::BytesMut,
-    bytesio::{bytes_reader::BytesReader, bytes_writer::BytesWriter},
-    std::vec::Vec,
-};
+use {super::errors::Mpeg4AvcHevcError, byteorder::BigEndian, bytesio::bytes_reader::BytesReader};
+#[allow(dead_code)]
 #[derive(Default)]
+
 pub struct Mpeg4Hevc {
     configuration_version: u8, // 1-only
     general_profile_space: u8, // 2bit,[0,3]

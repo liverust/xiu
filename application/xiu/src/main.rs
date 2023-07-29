@@ -1,5 +1,3 @@
-use clap::ArgGroup;
-
 use {
     //https://rustcc.cn/article?id=6dcbf032-0483-4980-8bfe-c64a7dfb33c7
     anyhow::Result,
@@ -16,7 +14,7 @@ async fn main() -> Result<()> {
 
     let mut cmd = Command::new("XIU")
         .bin_name("xiu")
-        .version("0.6.1")
+        .version("0.7.0")
         .author("HarlanC <harlanc@foxmail.com>")
         .about("A secure and easy to use live media server, hope you love it!!!")
         .arg(
