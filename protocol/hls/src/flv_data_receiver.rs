@@ -34,7 +34,7 @@ impl FlvDataReceiver {
         stream_name: String,
         event_producer: StreamHubEventSender,
         duration: i64,
-        record_path: Option<String>,
+        is_record: bool,
     ) -> Self {
         let (_, data_consumer) = mpsc::unbounded_channel();
         let subscriber_id = Uuid::new(RandomDigitCount::Four);
@@ -44,7 +44,7 @@ impl FlvDataReceiver {
             stream_name: stream_name.clone(),
             data_consumer,
             event_producer,
-            media_processor: Flv2HlsRemuxer::new(duration, app_name, stream_name, record_path),
+            media_processor: Flv2HlsRemuxer::new(duration, app_name, stream_name, is_record),
             subscriber_id,
         }
     }

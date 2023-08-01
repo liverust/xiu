@@ -56,7 +56,7 @@ impl Config {
             hls_config = Some(HlsConfig {
                 enabled: true,
                 port: hls_port,
-                record_path: None,
+                is_record: false,
             });
         }
 
@@ -114,7 +114,8 @@ pub struct HttpFlvConfig {
 pub struct HlsConfig {
     pub enabled: bool,
     pub port: usize,
-    pub record_path: Option<String>,
+    //record or not
+    pub is_record: bool,
 }
 
 pub enum LogLevel {

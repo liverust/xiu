@@ -9,19 +9,19 @@ use {
 pub struct HlsRemuxer {
     client_event_consumer: BroadcastEventReceiver,
     event_producer: StreamHubEventSender,
-    record_path: Option<String>,
+    is_record: bool,
 }
 
 impl HlsRemuxer {
     pub fn new(
         consumer: BroadcastEventReceiver,
         event_producer: StreamHubEventSender,
-        record_path: Option<String>,
+        is_record: bool,
     ) -> Self {
         Self {
             client_event_consumer: consumer,
             event_producer,
-            record_path,
+            is_record,
         }
     }
 
@@ -40,7 +40,7 @@ impl HlsRemuxer {
                             stream_name,
                             self.event_producer.clone(),
                             5,
-                            self.record_path.clone(),
+                            self.is_record,
                         );
 
                         tokio::spawn(async move {

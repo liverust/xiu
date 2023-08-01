@@ -35,21 +35,7 @@ pub struct Flv2HlsRemuxer {
 }
 
 impl Flv2HlsRemuxer {
-    pub fn new(
-        duration: i64,
-        app_name: String,
-        stream_name: String,
-        record_path: Option<String>,
-    ) -> Self {
-        //gen record path
-        if let Some(path) = &record_path {
-            if fs::metadata(path).is_err() {
-                if let Err(err) = fs::create_dir(path) {
-                    log::error!("cannot create HLS record path: {err}");
-                }
-            }
-        }
-
+    pub fn new(duration: i64, app_name: String, stream_name: String, is_record: bool) -> Self {
         let mut ts_muxer = TsMuxer::new();
         let audio_pid = ts_muxer
             .add_stream(epsi_stream_type::PSI_STREAM_AAC, BytesMut::new())
@@ -57,8 +43,6 @@ impl Flv2HlsRemuxer {
         let video_pid = ts_muxer
             .add_stream(epsi_stream_type::PSI_STREAM_H264, BytesMut::new())
             .unwrap();
-
-        let m3u8_name = format!("{stream_name}.m3u8");
 
         Self {
             video_demuxer: FlvVideoTagDemuxer::new(),
@@ -78,7 +62,7 @@ impl Flv2HlsRemuxer {
             video_pid,
             audio_pid,
 
-            m3u8_handler: M3u8::new(duration, 6, m3u8_name, app_name, stream_name, record_path),
+            m3u8_handler: M3u8::new(duration, 6, app_name, stream_name, is_record),
         }
     }
 
