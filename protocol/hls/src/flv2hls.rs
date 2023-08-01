@@ -1,5 +1,3 @@
-use std::fs::{self};
-
 use {
     super::{define::FlvDemuxerData, errors::MediaError, m3u8::M3u8},
     bytes::BytesMut,

@@ -33,7 +33,6 @@ pub struct HttpFlv {
     subscriber_id: Uuid,
     request_url: String,
     remote_addr: SocketAddr,
-    is_record: bool,
 }
 
 impl HttpFlv {
@@ -44,7 +43,6 @@ impl HttpFlv {
         http_response_data_producer: HttpResponseDataProducer,
         request_url: String,
         remote_addr: SocketAddr,
-        is_record: bool,
     ) -> Self {
         let (_, data_consumer) = mpsc::unbounded_channel();
         let subscriber_id = Uuid::new(RandomDigitCount::Four);
@@ -59,7 +57,6 @@ impl HttpFlv {
             subscriber_id,
             request_url,
             remote_addr,
-            is_record,
         }
     }
 
